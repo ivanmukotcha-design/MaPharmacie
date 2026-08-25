@@ -1,0 +1,80 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "medicaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "nom", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "medicaments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "est_actif", "order": "ASCENDING" },
+        { "fieldPath": "nom", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ventes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ventes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "type_vente", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "abonnements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "est_actif", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paiements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "statut", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activites",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacie_id", "order": "ASCENDING" },
+        { "fieldPath": "lu", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,6 @@
+- [x] Update dependencies and configure icons in `pubspec.yaml`
+- [x] Create `splash_screen.dart`
+- [x] Update `login_screen.dart` (Google Icon)
+- [x] Update `router.dart` (Splash route)
+- [x] Run icon generation command
+- [x] Verify changes
