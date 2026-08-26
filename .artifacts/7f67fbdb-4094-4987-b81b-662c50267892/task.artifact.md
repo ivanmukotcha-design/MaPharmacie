@@ -1,0 +1,4 @@
+- `[x]` Stabiliser `routerProvider` dans `router.dart` en évitant `ref.watch` pour l'instance complète
+- `[x]` Ajouter des `ValueKey` dans `screens_bundle.dart` pour les éléments des paramètres
+- `[x]` Nettoyer le `builder` dans `main.dart`
+- `[x]` Vérifier la disparition de l'erreur GlobalKey

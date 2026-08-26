@@ -16,7 +16,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
   bool _googleLoading = false;
@@ -24,7 +24,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _usernameCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
@@ -33,8 +33,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).loginWithEmail(
-        _emailCtrl.text.trim(),
+      await ref.read(authServiceProvider).loginWithUsername(
+        _usernameCtrl.text.trim().toLowerCase(),
         _passwordCtrl.text,
       );
       if (mounted) context.go('/dashboard');
@@ -113,7 +113,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               Text('Connexion', style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
               const SizedBox(height: 4),
               Text(
-                'Connectez-vous à votre espace pharmacie',
+                'Connectez-vous avec votre nom d\'utilisateur',
                 style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
               ),
 
@@ -124,14 +124,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   children: [
                     PfTextField(
-                      controller: _emailCtrl,
-                      label: 'Email',
-                      hint: 'votre@email.com',
-                      prefixIcon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
+                      controller: _usernameCtrl,
+                      label: 'Nom d\'utilisateur',
+                      hint: 'Meta_Pharma',
+                      prefixIcon: Icons.person_outline,
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Email requis';
-                        if (!v.contains('@')) return 'Email invalide';
+                        if (v == null || v.isEmpty) return 'Nom d\'utilisateur requis';
                         return null;
                       },
                     ),

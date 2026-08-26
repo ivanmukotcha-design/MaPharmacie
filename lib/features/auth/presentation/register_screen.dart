@@ -17,6 +17,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nomPharmacieCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
   final _proprietaireCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _telephoneCtrl = TextEditingController();
@@ -33,7 +34,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void dispose() {
     for (final ctrl in [
-      _nomPharmacieCtrl, _proprietaireCtrl, _emailCtrl,
+      _nomPharmacieCtrl, _usernameCtrl, _proprietaireCtrl, _emailCtrl,
       _telephoneCtrl, _adresseCtrl, _villeCtrl, _paysCtrl,
       _passwordCtrl, _confirmPasswordCtrl,
     ]) {
@@ -57,6 +58,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final pharmacie = await ref.read(authServiceProvider).creerPharmacie(
         userId: cred.user!.uid,
         nom: _nomPharmacieCtrl.text.trim(),
+        username: _usernameCtrl.text.trim().toLowerCase(),
         email: _emailCtrl.text.trim(),
         telephone: _telephoneCtrl.text.trim(),
         adresse: _adresseCtrl.text.trim(),
@@ -158,7 +160,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           PfTextField(
             controller: _proprietaireCtrl,
             label: 'Nom du propriétaire',
-            hint: 'Dr. Jean Dupont',
+            hint: 'Dr. Paul',
             prefixIcon: Icons.person_outline,
             validator: (v) => v?.isEmpty == true ? 'Requis' : null,
           ),
@@ -229,6 +231,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       isActive: _currentStep >= 2,
       content: Column(
         children: [
+          PfTextField(
+            controller: _usernameCtrl,
+            label: 'Nom d\'utilisateur',
+            hint: 'jean_pharma',
+            prefixIcon: Icons.alternate_email,
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Requis';
+              if (v.length < 3) return 'Trop court';
+              if (v.contains(' ')) return 'Pas d\'espaces';
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
           PfTextField(
             controller: _emailCtrl,
             label: 'Email',

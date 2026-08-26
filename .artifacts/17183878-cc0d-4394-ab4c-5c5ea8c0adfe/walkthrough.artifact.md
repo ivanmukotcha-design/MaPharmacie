@@ -1,27 +1,29 @@
-# Walkthrough - Custom UI & Branding Update
+# Walkthrough - Login with Username and Email Registration
 
-I have implemented the custom Splash Screen, updated the Google Sign-In icon, and changed the application's launcher icon.
+I have updated the authentication flow to support **Username** as the primary login identifier while still requiring an **Email** during registration.
 
-## Key Changes
+## Changes Made
 
-### 1. Application Icon
-- **New Icon**: The application now uses `assets/images/3.jpg` as its launcher icon on both Android and iOS.
-- **Tooling**: Integrated `flutter_launcher_icons` to manage automatic generation.
+### 1. Data Model
+- **`PharmacieModel`**: Added a `username` field to store and retrieve the unique identifier for each pharmacy.
 
-### 2. Custom Splash Screen
-- **Initial View**: Launching the app now displays a custom splash screen featuring `assets/images/1.jpg` centered on a white background.
-- **Messaging**: Added the text "Accéder à votre espace pharmaceutique" below the image.
-- **Experience**: The splash screen stays for 2 seconds before automatically navigating to the Login screen or Dashboard (if already logged in).
+### 2. Authentication Logic
+- **`AuthService`**:
+    - Added `loginWithUsername`: This method first looks up the associated email in Firestore using the username and then performs a standard Firebase email/password login.
+    - Updated `creerPharmacie` to save the `username` field in the Firestore document.
 
-### 3. Google Sign-In UI
-- **Enhanced Button**: Replaced the previous simplified red "G" box with the high-quality Google logo from `assets/images/5.png` on the login screen.
+### 3. User Interface
+- **`RegisterScreen`**: Added a new "Nom d'utilisateur" field in the final step of the registration process.
+- **`LoginScreen`**:
+    - Replaced the "Email" field with a "Nom d'utilisateur" field.
+    - Updated the "Continuer avec Google" button to use the high-quality logo from `assets/images/5.png` (from previous task).
 
 ## Verification
-- **Router**: Confirmed `initialLocation` is set to `/splash`.
-- **Assets**: Verified all images (`1.jpg`, `3.jpg`, `5.png`) are correctly referenced from the assets folder.
-- **Tests**: The app flow has been updated to handle the new initial route.
+- Registration now saves both `email` and `username`.
+- Login successfully resolves the username to an email and authenticates.
+- Google Sign-In remains functional.
 
-render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/pubspec.yaml)
-render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/features/auth/presentation/splash_screen.dart)
+render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/models/models.dart)
+render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/config/auth_provider.dart)
+render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/features/auth/presentation/register_screen.dart)
 render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/features/auth/presentation/login_screen.dart)
-render_diffs(file:///C:/Users/ivan/Desktop/FLUTTER PROJECTS/pharmaflow/lib/config/router.dart)

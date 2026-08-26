@@ -74,10 +74,11 @@ class MaPharmacieApp extends ConsumerWidget {
       
       // Configuration globale de l'UI
       builder: (context, child) {
-        // Appliquer un style de barre système qui réagit au thème
-        final isDark = themeMode.isDark(context);
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
         
         return AnnotatedRegion<SystemUiOverlayStyle>(
+          key: const ValueKey('app_system_ui'),
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
@@ -86,7 +87,6 @@ class MaPharmacieApp extends ConsumerWidget {
           ),
           child: MediaQuery(
             data: MediaQuery.of(context).copyWith(
-              // Empêche le texte de déborder si l'utilisateur change la taille de police système
               textScaler: TextScaler.noScaling,
             ),
             child: child ?? const SizedBox.shrink(),

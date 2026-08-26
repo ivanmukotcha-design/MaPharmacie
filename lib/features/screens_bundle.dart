@@ -301,11 +301,6 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pharmacieAsync = ref.watch(currentPharmacieProvider);
     final pharmacie = pharmacieAsync.valueOrNull;
-    final themeMode = ref.watch(themeModeProvider);
-
-    String themeLabel = 'Système';
-    if (themeMode == ThemeMode.light) themeLabel = 'Clair';
-    if (themeMode == ThemeMode.dark) themeLabel = 'Sombre';
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -342,28 +337,69 @@ class SettingsScreen extends ConsumerWidget {
           _settingsGroup('Application', [
             _settingsTile(
               context, 
-              Icons.brightness_6_outlined, 
-              'Thème', 
-              themeLabel, 
-              () => _showThemeDialog(context, ref),
+              Icons.notifications_outlined, 
+              'Notifications', 
+              'Alertes stock', 
+              () {},
+              key: const ValueKey('settings_notifications'),
             ),
-            _settingsTile(context, Icons.notifications_outlined, 'Notifications', 'Alertes stock', () {}),
-            _settingsTile(context, Icons.language_outlined, 'Langue', 'Français', () {}),
           ]),
 
           _settingsGroup('Compte', [
-            _settingsTile(context, Icons.business_outlined, 'Informations pharmacie', '', () {}),
-            _settingsTile(context, Icons.lock_outline, 'Changer le mot de passe', '', () {}),
+            _settingsTile(
+              context, 
+              Icons.business_outlined, 
+              'Informations pharmacie', 
+              '', 
+              () {},
+              key: const ValueKey('settings_info'),
+            ),
+            _settingsTile(
+              context, 
+              Icons.lock_outline, 
+              'Changer le mot de passe', 
+              '', 
+              () {},
+              key: const ValueKey('settings_password'),
+            ),
           ]),
 
           _settingsGroup('Données', [
-            _settingsTile(context, Icons.sync_outlined, 'Synchroniser maintenant', '', () {}),
-            _settingsTile(context, Icons.backup_outlined, 'Sauvegarde locale', '', () {}),
+            _settingsTile(
+              context, 
+              Icons.sync_outlined, 
+              'Synchroniser maintenant', 
+              '', 
+              () {},
+              key: const ValueKey('settings_sync'),
+            ),
+            _settingsTile(
+              context, 
+              Icons.backup_outlined, 
+              'Sauvegarde locale', 
+              '', 
+              () {},
+              key: const ValueKey('settings_backup'),
+            ),
           ]),
 
           _settingsGroup('Support', [
-            _settingsTile(context, Icons.help_outline, 'Centre d\'aide', '', () {}),
-            _settingsTile(context, Icons.privacy_tip_outlined, 'Politique de confidentialité', '', () {}),
+            _settingsTile(
+              context, 
+              Icons.help_outline, 
+              'Centre d\'aide', 
+              '', 
+              () {},
+              key: const ValueKey('settings_help'),
+            ),
+            _settingsTile(
+              context, 
+              Icons.privacy_tip_outlined, 
+              'Politique de confidentialité', 
+              '', 
+              () {},
+              key: const ValueKey('settings_privacy'),
+            ),
           ]),
 
           Padding(
@@ -386,49 +422,6 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
         ],
-      ),
-    );
-  }
-
-  void _showThemeDialog(BuildContext context, WidgetRef ref) {
-    final currentTheme = ref.read(themeModeProvider);
-    
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Choisir le thème'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<ThemeMode>(
-              title: const Text('Clair'),
-              value: ThemeMode.light,
-              groupValue: currentTheme,
-              onChanged: (val) {
-                ref.read(themeModeProvider.notifier).state = val!;
-                Navigator.pop(ctx);
-              },
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Sombre'),
-              value: ThemeMode.dark,
-              groupValue: currentTheme,
-              onChanged: (val) {
-                ref.read(themeModeProvider.notifier).state = val!;
-                Navigator.pop(ctx);
-              },
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Système (automatique)'),
-              value: ThemeMode.system,
-              groupValue: currentTheme,
-              onChanged: (val) {
-                ref.read(themeModeProvider.notifier).state = val!;
-                Navigator.pop(ctx);
-              },
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -464,8 +457,9 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _settingsTile(BuildContext context, IconData icon, String titre, String sous, VoidCallback onTap) {
+  Widget _settingsTile(BuildContext context, IconData icon, String titre, String sous, VoidCallback onTap, {Key? key}) {
     return ListTile(
+      key: key,
       leading: Container(
         width: 36, height: 36,
         decoration: BoxDecoration(color: AppColors.surface, borderRadius: AppBorderRadius.sm),

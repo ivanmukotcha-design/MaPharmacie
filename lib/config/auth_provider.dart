@@ -58,6 +58,24 @@ class AuthService {
     return creds;
   }
 
+  Future<UserCredential> loginWithUsername(String username, String password) async {
+    // 1. Rechercher l'email associé au nom d'utilisateur dans Firestore
+    final snapshot = await _firestore
+        .collection(AppConstants.colPharmacies)
+        .where('username', isEqualTo: username)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      throw Exception('Nom d\'utilisateur introuvable');
+    }
+
+    final email = snapshot.docs.first.data()['email'] as String;
+
+    // 2. Se connecter avec l'email trouvé
+    return loginWithEmail(email, password);
+  }
+
   Future<UserCredential> loginWithGoogle() async {
     final account = await _googleSignIn.signIn();
     if (account == null) throw Exception('Connexion Google annulée');
@@ -99,6 +117,7 @@ class AuthService {
   Future<PharmacieModel> creerPharmacie({
     required String userId,
     required String nom,
+    required String username,
     required String email,
     required String telephone,
     required String adresse,
@@ -112,6 +131,7 @@ class AuthService {
     final pharmaData = {
       'code': code,
       'nom': nom,
+      'username': username,
       'email': email,
       'telephone': telephone,
       'adresse': adresse,
@@ -132,6 +152,7 @@ class AuthService {
       id: userId,
       code: code,
       nom: nom,
+      username: username,
       email: email,
       telephone: telephone,
       adresse: adresse,

@@ -6,6 +6,7 @@ class PharmacieModel {
   final String id;
   final String code;          // PHR-0001
   final String nom;
+  final String username;
   final String email;
   final String telephone;
   final String adresse;
@@ -22,6 +23,7 @@ class PharmacieModel {
     required this.id,
     required this.code,
     required this.nom,
+    required this.username,
     required this.email,
     required this.telephone,
     required this.adresse,
@@ -40,6 +42,7 @@ class PharmacieModel {
       id: id,
       code: map['code'] ?? '',
       nom: map['nom'] ?? '',
+      username: map['username'] ?? '',
       email: map['email'] ?? '',
       telephone: map['telephone'] ?? '',
       adresse: map['adresse'] ?? '',
@@ -57,6 +60,7 @@ class PharmacieModel {
   Map<String, dynamic> toMap() => {
     'code': code,
     'nom': nom,
+    'username': username,
     'email': email,
     'telephone': telephone,
     'adresse': adresse,

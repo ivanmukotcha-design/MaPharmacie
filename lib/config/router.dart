@@ -22,31 +22,29 @@ import '../core/constants/app_constants.dart';
 import 'auth_provider.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final pharmaState = ref.watch(currentPharmacieProvider);
+  final notifier = RouterNotifier(ref);
 
   return GoRouter(
     initialLocation: '/splash',
+    refreshListenable: notifier,
     redirect: (context, state) {
-      // Si on est sur le splash, on laisse l'écran gérer sa propre navigation
+      final user = ref.read(currentUserProvider);
+      final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
+      
+      final authLoading = ref.read(authStateProvider).isLoading;
+      final pharmaLoading = ref.read(currentPharmacieProvider).isLoading;
+
       if (state.matchedLocation == '/splash') return null;
-
-      // Attendre que l'état initial soit chargé
-      if (authState.isLoading || pharmaState.isLoading) return null;
-
-      final user = authState.valueOrNull;
-      final pharmacie = pharmaState.valueOrNull;
+      if (authLoading || pharmaLoading) return null;
       
       final isLoggedIn = user != null;
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/register');
 
-      // 1. Non connecté
       if (!isLoggedIn) {
         return isAuthRoute ? null : '/login';
       }
 
-      // 2. Déjà connecté, redirection loin des pages d'auth
       if (isAuthRoute) return '/dashboard';
 
       return null;
@@ -111,3 +109,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authStateProvider, (_, __) => notifyListeners());
+    _ref.listen(currentPharmacieProvider, (_, __) => notifyListeners());
+  }
+}

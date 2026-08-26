@@ -1,6 +1,7 @@
-- [x] Update dependencies and configure icons in `pubspec.yaml`
-- [x] Create `splash_screen.dart`
-- [x] Update `login_screen.dart` (Google Icon)
-- [x] Update `router.dart` (Splash route)
-- [x] Run icon generation command
-- [x] Verify changes
+- [x] Add `username` field to `PharmacieModel` in `models.dart`
+- [x] Update `AuthService` in `auth_provider.dart`
+    - [x] Update `creerPharmacie` to accept `username`
+    - [x] Add `loginWithUsername` method
+- [x] Update `RegisterScreen` to include `username` field
+- [x] Update `LoginScreen` to use `username` instead of `email`
+- [x] Verify registration and login flows
