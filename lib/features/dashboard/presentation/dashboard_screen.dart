@@ -10,14 +10,18 @@ import '../../../models/models.dart';
 import '../../../repositories/medicament_repository.dart';
 import '../../../local_database/local_database.dart';
 import '../../../services/sync_service.dart';
+import '../../../shared/widgets/sync_banner.dart';
 
-final dashboardStatsProvider = FutureProvider.autoDispose<DashboardStats?>((ref) async {
+final dashboardStatsProvider = FutureProvider.autoDispose<DashboardStats?>((
+  ref,
+) async {
+  ref.watch(localChangesProvider);
   final pharmacie = ref.watch(currentPharmacieProvider).valueOrNull;
   if (pharmacie == null) return null;
 
   // On récupère les stats de ventes brutes
   final raw = await LocalDatabase.getDashboardStats(pharmacie.id);
-  
+
   // On utilise le repository pour avoir les modèles de médicaments
   final repo = ref.read(medicamentRepositoryProvider);
   final meds = await repo.getMedicaments(pharmacie.id);
@@ -70,6 +74,7 @@ class DashboardScreen extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  const SyncBanner(),
                   _buildVentesCard(statsAsync),
                   const SizedBox(height: 16),
                   _buildStockGrid(context, statsAsync),
@@ -87,7 +92,12 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, WidgetRef ref, AsyncValue<PharmacieModel?> pharmacieAsync, bool isOnline) {
+  Widget _buildAppBar(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<PharmacieModel?> pharmacieAsync,
+    bool isOnline,
+  ) {
     final pharmacie = pharmacieAsync.valueOrNull;
     final greeting = _getGreeting();
     final now = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now());
@@ -122,12 +132,17 @@ class DashboardScreen extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       pharmacie?.nom ?? 'Ma Pharmacie',
-                      style: AppTextStyles.h2.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: AppTextStyles.h2.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       now,
-                      style: AppTextStyles.small.copyWith(color: Colors.white60),
+                      style: AppTextStyles.small.copyWith(
+                        color: Colors.white60,
+                      ),
                     ),
                   ],
                 ),
@@ -161,19 +176,21 @@ class DashboardScreen extends ConsumerWidget {
           const SizedBox(width: 6),
           Text(
             isOnline ? 'Online' : 'Offline',
-            style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+            style: AppTextStyles.caption.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
     );
   }
 
-
-
   Widget _buildVentesCard(AsyncValue<DashboardStats?> statsAsync) {
     return statsAsync.when(
       loading: () => const _SkeletonCard(height: 120),
-      error: (_, __) => const SizedBox(),
+      error: (error, _) =>
+          Text('Impossible de charger les statistiques : $error'),
       data: (stats) {
         if (stats == null) return const SizedBox();
         return Container(
@@ -190,7 +207,7 @@ class DashboardScreen extends ConsumerWidget {
                 color: AppColors.primary.withOpacity(0.3),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
-              )
+              ),
             ],
           ),
           child: Row(
@@ -199,15 +216,25 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Ventes du jour', style: AppTextStyles.small.copyWith(color: Colors.white70)),
+                    Text(
+                      'Ventes du jour',
+                      style: AppTextStyles.small.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${NumberFormat.decimalPattern('fr_FR').format(stats.ventesJour)} FC',
-                      style: AppTextStyles.h2.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: AppTextStyles.h2.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       '${stats.ventesCount} transaction${stats.ventesCount > 1 ? 's' : ''}',
-                      style: AppTextStyles.small.copyWith(color: Colors.white60),
+                      style: AppTextStyles.small.copyWith(
+                        color: Colors.white60,
+                      ),
                     ),
                   ],
                 ),
@@ -218,13 +245,26 @@ class DashboardScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Bénéfices', style: AppTextStyles.small.copyWith(color: Colors.white70)),
+                    Text(
+                      'Bénéfices',
+                      style: AppTextStyles.small.copyWith(
+                        color: Colors.white70,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '${NumberFormat.decimalPattern('fr_FR').format(stats.beneficesJour)} FC',
-                      style: AppTextStyles.h3.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+                      style: AppTextStyles.h3.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    Text('Aujourd\'hui', style: AppTextStyles.small.copyWith(color: Colors.white60)),
+                    Text(
+                      'Aujourd\'hui',
+                      style: AppTextStyles.small.copyWith(
+                        color: Colors.white60,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -235,7 +275,10 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStockGrid(BuildContext context, AsyncValue<DashboardStats?> statsAsync) {
+  Widget _buildStockGrid(
+    BuildContext context,
+    AsyncValue<DashboardStats?> statsAsync,
+  ) {
     return statsAsync.when(
       loading: () => GridView.count(
         crossAxisCount: 2,
@@ -293,12 +336,27 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildAccesRapide(BuildContext context) {
     final actions = [
-      _QuickAction('Vendre', Icons.add_shopping_cart, AppColors.success, '/ventes'),
+      _QuickAction(
+        'Vendre',
+        Icons.add_shopping_cart,
+        AppColors.success,
+        '/ventes',
+      ),
       _QuickAction('Stock', Icons.medication, AppColors.primary, '/stock'),
-      _QuickAction('Historique', Icons.history, AppColors.secondary, '/historique-ventes'),
+      _QuickAction(
+        'Historique',
+        Icons.history,
+        AppColors.secondary,
+        '/historique-ventes',
+      ),
       _QuickAction('Rapports', Icons.analytics, AppColors.warning, '/rapports'),
       _QuickAction('Contacts', Icons.people, AppColors.info, '/fournisseurs'),
-      _QuickAction('Réglages', Icons.settings, AppColors.textMuted, '/parametres'),
+      _QuickAction(
+        'Réglages',
+        Icons.settings,
+        AppColors.textMuted,
+        '/parametres',
+      ),
     ];
 
     return Column(
@@ -312,7 +370,9 @@ class DashboardScreen extends ConsumerWidget {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          children: actions.map((a) => _buildQuickActionItem(context, a)).toList(),
+          children: actions
+              .map((a) => _buildQuickActionItem(context, a))
+              .toList(),
         ),
       ],
     );
@@ -332,14 +392,22 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             Icon(a.icon, color: a.color, size: 28),
             const SizedBox(height: 8),
-            Text(a.label, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              a.label,
+              style: AppTextStyles.caption.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAlertesSection(BuildContext context, AsyncValue<DashboardStats?> statsAsync) {
+  Widget _buildAlertesSection(
+    BuildContext context,
+    AsyncValue<DashboardStats?> statsAsync,
+  ) {
     return statsAsync.when(
       loading: () => const SizedBox(),
       error: (_, __) => const SizedBox(),
@@ -347,20 +415,24 @@ class DashboardScreen extends ConsumerWidget {
         if (stats == null) return const SizedBox();
         final alertes = <Widget>[];
         if (stats.enRupture > 0) {
-          alertes.add(_AlertItem(
-            type: 'Rupture critique',
-            message: '${stats.enRupture} produit(s) sont indisponibles.',
-            color: AppColors.danger,
-            icon: Icons.error_rounded,
-          ));
+          alertes.add(
+            _AlertItem(
+              type: 'Rupture critique',
+              message: '${stats.enRupture} produit(s) sont indisponibles.',
+              color: AppColors.danger,
+              icon: Icons.error_rounded,
+            ),
+          );
         }
         if (stats.expireBientot > 0) {
-          alertes.add(_AlertItem(
-            type: 'Péremption proche',
-            message: '${stats.expireBientot} produit(s) expirent ce mois-ci.',
-            color: Colors.orange,
-            icon: Icons.timer_outlined,
-          ));
+          alertes.add(
+            _AlertItem(
+              type: 'Péremption proche',
+              message: '${stats.expireBientot} produit(s) expirent ce mois-ci.',
+              color: Colors.orange,
+              icon: Icons.timer_outlined,
+            ),
+          );
         }
 
         if (alertes.isEmpty) return const SizedBox();
@@ -415,8 +487,19 @@ class _StatCard extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 20),
             const Spacer(),
-            Text(value, style: AppTextStyles.h2.copyWith(color: color, fontWeight: FontWeight.bold)),
-            Text(label, style: AppTextStyles.small.copyWith(color: AppColors.textSecondary)),
+            Text(
+              value,
+              style: AppTextStyles.h2.copyWith(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              label,
+              style: AppTextStyles.small.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ],
         ),
       ),
@@ -429,7 +512,12 @@ class _AlertItem extends StatelessWidget {
   final Color color;
   final IconData icon;
 
-  const _AlertItem({required this.type, required this.message, required this.color, required this.icon});
+  const _AlertItem({
+    required this.type,
+    required this.message,
+    required this.color,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -449,8 +537,19 @@ class _AlertItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(type, style: AppTextStyles.label.copyWith(color: color, fontWeight: FontWeight.bold)),
-                Text(message, style: AppTextStyles.small.copyWith(color: AppColors.textSecondary)),
+                Text(
+                  type,
+                  style: AppTextStyles.label.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  message,
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),

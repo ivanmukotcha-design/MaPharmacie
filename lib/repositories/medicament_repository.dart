@@ -1,118 +1,115 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../core/constants/app_constants.dart';
+import 'package:sqflite/sqflite.dart';
 import '../local_database/local_database.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
+import 'repository_access.dart';
 
 final medicamentRepositoryProvider = Provider<MedicamentRepository>((ref) {
+  final sync = ref.watch(syncServiceProvider);
   return MedicamentRepository(
-    ref.watch(syncServiceProvider),
-    ref.watch(isOnlineProvider),
+    RepositoryAccess.forRef(ref),
+    onChanged: sync.scheduleSync,
   );
 });
 
 class MedicamentRepository {
-  final SyncService _syncService;
-  final bool _isOnline;
+  final RepositoryAccess _access;
+  final Future<Database> Function() _database;
+  final void Function()? _onChanged;
 
-  MedicamentRepository(this._syncService, this._isOnline);
+  MedicamentRepository(
+    this._access, {
+    Future<Database> Function()? database,
+    void Function()? onChanged,
+  }) : _database = database ?? (() => LocalDatabase.database),
+       _onChanged = onChanged;
 
-  Future<void> saveMedicament(MedicamentModel medicament, {bool isEdit = false}) async {
-    final data = medicament.toMap();
-    
-    // 1. Sauvegarde locale (Source de vérité immédiate)
-    // On adapte le map pour Sqflite (conversion des types non supportés comme DateTime)
-    final localData = Map<String, dynamic>.from(data);
-    localData['id'] = medicament.id;
-    localData['date_expiration'] = medicament.dateExpiration?.toIso8601String();
-    localData['created_at'] = medicament.createdAt.toIso8601String();
-    localData['updated_at'] = medicament.updatedAt.toIso8601String();
-    
-    // Aplatir les unités pour le SQL
-    localData['cartons'] = medicament.unites.cartons;
-    localData['boites'] = medicament.unites.boites;
-    localData['plaquettes'] = medicament.unites.plaquettes;
-    localData['comprimes'] = medicament.unites.comprimes;
-    localData['flacons'] = medicament.unites.flacons;
-    localData['cartons_par_boite'] = medicament.unites.cartonsParBoite;
-    localData['boites_par_plaquette'] = medicament.unites.boitesParPlaquette;
-    localData['plaquettes_par_comprime'] = medicament.unites.plaquettesParComprime;
-    localData.remove('unites');
-    
-    localData['synced'] = _isOnline ? 1 : 0;
-    localData['est_actif'] = medicament.estActif ? 1 : 0;
-
-    await LocalDatabase.upsertMedicament(localData);
-
-    // 2. Sauvegarde Cloud ou Queue de sync
-    if (_isOnline) {
-      await FirebaseFirestore.instance
-          .collection(AppConstants.colPharmacies)
-          .doc(medicament.pharmacieId)
-          .collection(AppConstants.colMedicaments)
-          .doc(medicament.id)
-          .set(data, SetOptions(merge: true));
-    } else {
-      await LocalDatabase.addToSyncQueue(
-        collection: '${AppConstants.colPharmacies}/${medicament.pharmacieId}/${AppConstants.colMedicaments}',
-        docId: medicament.id,
-        operation: 'set',
-        data: data,
+  Future<void> saveMedicament(
+    MedicamentModel medicament, {
+    bool isEdit = false,
+  }) async {
+    _access.write(medicament.pharmacieId);
+    medicament.validate();
+    final db = await _database();
+    await db.transaction((transaction) async {
+      _access.write(medicament.pharmacieId);
+      final rows = await transaction.query(
+        'medicaments',
+        where: 'id = ? AND pharmacie_id = ?',
+        whereArgs: [medicament.id, medicament.pharmacieId],
       );
-    }
+      if (isEdit && rows.isEmpty) throw StateError('Médicament introuvable.');
+      if (!isEdit && rows.isNotEmpty)
+        throw StateError('Ce médicament existe déjà.');
+      final previous = rows.isEmpty
+          ? null
+          : MedicamentModel.fromSql(rows.first);
+      final revision = previous?.revision ?? 0;
+      if (medicament.revision != revision) {
+        throw StateError(
+          'Le stock a changé. Rechargez le médicament avant de modifier.',
+        );
+      }
+      final updated = medicament.copyWith(revision: revision + 1);
+      final local = updated.toSql();
+      final cloud = updated.toMap();
+      if (previous != null) {
+        local['created_at'] = previous.createdAt.toIso8601String();
+        cloud['created_at'] = previous.toMap()['created_at'];
+        await transaction.update(
+          'medicaments',
+          local,
+          where: 'id = ? AND pharmacie_id = ?',
+          whereArgs: [updated.id, updated.pharmacieId],
+        );
+      } else {
+        await transaction.insert('medicaments', local);
+      }
+      await LocalDatabase.addToSyncQueue(
+        executor: transaction,
+        collection: 'pharmacies/${updated.pharmacieId}/medicaments',
+        docId: updated.id,
+        operation: 'set',
+        data: {'document': cloud, 'expected_revision': revision},
+      );
+    });
+    LocalDatabase.notifyChanged();
+    _onChanged?.call();
   }
 
   Future<List<MedicamentModel>> getMedicaments(String pharmacieId) async {
-    final list = await LocalDatabase.getMedicaments(pharmacieId);
-    return list.map((m) {
-      // Re-transformer le format SQL en format Modèle
-      final map = Map<String, dynamic>.from(m);
-      map['created_at'] = Timestamp.fromDate(DateTime.parse(m['created_at']));
-      map['updated_at'] = Timestamp.fromDate(DateTime.parse(m['updated_at']));
-      if (m['date_expiration'] != null) {
-        map['date_expiration'] = Timestamp.fromDate(DateTime.parse(m['date_expiration']));
-      }
-      map['unites'] = {
-        'cartons': m['cartons'],
-        'boites': m['boites'],
-        'plaquettes': m['plaquettes'],
-        'comprimes': m['comprimes'],
-        'flacons': m['flacons'],
-        'cartons_par_boite': m['cartons_par_boite'],
-        'boites_par_plaquette': m['boites_par_plaquette'],
-        'plaquettes_par_comprime': m['plaquettes_par_comprime'],
-      };
-      return MedicamentModel.fromMap(map, m['id']);
-    }).toList();
+    _access.read(pharmacieId);
+    final db = await _database();
+    final rows = await db.query(
+      'medicaments',
+      where: 'pharmacie_id = ? AND est_actif = 1',
+      whereArgs: [pharmacieId],
+      orderBy: 'nom ASC',
+    );
+    _access.read(pharmacieId);
+    return rows.map(MedicamentModel.fromSql).toList();
   }
 
-  Future<MedicamentModel?> getMedicamentById(String pharmacieId, String id) async {
-    final meds = await getMedicaments(pharmacieId);
-    try {
-      return meds.firstWhere((m) => m.id == id);
-    } catch (_) {
-      return null;
-    }
+  Future<MedicamentModel?> getMedicamentById(
+    String pharmacieId,
+    String id,
+  ) async {
+    _access.read(pharmacieId);
+    final db = await _database();
+    final rows = await db.query(
+      'medicaments',
+      where: 'pharmacie_id = ? AND id = ? AND est_actif = 1',
+      whereArgs: [pharmacieId, id],
+    );
+    _access.read(pharmacieId);
+    return rows.isEmpty ? null : MedicamentModel.fromSql(rows.first);
   }
 
   Future<void> deleteMedicament(String pharmacieId, String id) async {
-    await LocalDatabase.deleteMedicament(id);
-    
-    if (_isOnline) {
-      await FirebaseFirestore.instance
-          .collection(AppConstants.colPharmacies)
-          .doc(pharmacieId)
-          .collection(AppConstants.colMedicaments)
-          .doc(id)
-          .update({'est_actif': false, 'updated_at': FieldValue.serverTimestamp()});
-    } else {
-      await LocalDatabase.addToSyncQueue(
-        collection: '${AppConstants.colPharmacies}/$pharmacieId/${AppConstants.colMedicaments}',
-        docId: id,
-        operation: 'update',
-        data: {'est_actif': false},
-      );
-    }
+    _access.write(pharmacieId);
+    final med = await getMedicamentById(pharmacieId, id);
+    if (med == null) throw StateError('Médicament introuvable.');
+    await saveMedicament(med.copyWith(estActif: false), isEdit: true);
   }
 }

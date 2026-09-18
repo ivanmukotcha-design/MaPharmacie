@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/create_account_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
@@ -14,61 +16,63 @@ import '../features/suppliers/presentation/fournisseurs_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/support/support_screen.dart';
 import '../features/settings/settings_screen.dart';
-import '../features/admin/presentation/admin_dashboard_screen.dart';
-import '../features/admin/presentation/admin_pharmacies_screen.dart';
-import '../features/admin/presentation/admin_tarifs_screen.dart';
 import '../shared/widgets/main_scaffold.dart';
-import '../core/constants/app_constants.dart';
 import 'auth_provider.dart';
+import 'access_policy.dart';
+import '../features/auth/presentation/access_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = RouterNotifier(ref);
 
-  return GoRouter(
+  ref.onDispose(notifier.dispose);
+  final router = GoRouter(
     initialLocation: '/splash',
     refreshListenable: notifier,
     redirect: (context, state) {
       final user = ref.read(currentUserProvider);
-      final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
-      
-      final authLoading = ref.read(authStateProvider).isLoading;
-      final pharmaLoading = ref.read(currentPharmacieProvider).isLoading;
-
-      if (state.matchedLocation == '/splash') return null;
-      if (authLoading || pharmaLoading) return null;
-      
-      final isLoggedIn = user != null;
-      final isAuthRoute = state.matchedLocation.startsWith('/login') ||
-          state.matchedLocation.startsWith('/register');
-
-      if (!isLoggedIn) {
-        return isAuthRoute ? null : '/login';
-      }
-
-      if (isAuthRoute) return '/dashboard';
-
-      return null;
+      final pharmacie = ref.read(currentPharmacieProvider);
+      final auth = ref.read(authStateProvider);
+      return sessionRedirect(
+        location: state.matchedLocation,
+        loading: auth.isLoading || (user != null && pharmacie.isLoading),
+        hasError: auth.hasError || (user != null && pharmacie.hasError),
+        userId: user?.uid,
+        pharmacie: pharmacie.valueOrNull,
+      );
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-
+      GoRoute(
+        path: '/register',
+        builder: (_, __) => const CreateAccountScreen(),
+      ),
+      GoRoute(path: '/configurer', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/acces', builder: (_, __) => const AccessScreen()),
       // Main app - Shell avec bottom nav
       ShellRoute(
         builder: (context, state, child) => MainScaffold(child: child),
         routes: [
-          GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
+          GoRoute(
+            path: '/dashboard',
+            builder: (_, __) => const DashboardScreen(),
+          ),
           GoRoute(path: '/stock', builder: (_, __) => const StockScreen()),
           GoRoute(path: '/ventes', builder: (_, __) => const VenteScreen()),
           GoRoute(
             path: '/historique-ventes',
             builder: (_, __) => const HistoriqueVentesScreen(),
           ),
-          GoRoute(path: '/fournisseurs', builder: (_, __) => const FournisseursScreen()),
+          GoRoute(
+            path: '/fournisseurs',
+            builder: (_, __) => const FournisseursScreen(),
+          ),
           GoRoute(path: '/rapports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: '/support', builder: (_, __) => const SupportScreen()),
-          GoRoute(path: '/parametres', builder: (_, __) => const SettingsScreen()),
+          GoRoute(
+            path: '/parametres',
+            builder: (_, __) => const SettingsScreen(),
+          ),
         ],
       ),
 
@@ -79,17 +83,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/medicament/:id',
-        builder: (_, state) => MedicamentDetailScreen(id: state.pathParameters['id']!),
+        builder: (_, state) =>
+            MedicamentDetailScreen(id: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/medicament/:id/modifier',
-        builder: (_, state) => MedicamentFormScreen(medicamentId: state.pathParameters['id']),
+        builder: (_, state) =>
+            MedicamentFormScreen(medicamentId: state.pathParameters['id']),
       ),
-
-      // Admin routes
-      GoRoute(path: '/admin', builder: (_, __) => const AdminDashboardScreen()),
-      GoRoute(path: '/admin/pharmacies', builder: (_, __) => const AdminPharmaciesScreen()),
-      GoRoute(path: '/admin/tarifs', builder: (_, __) => const AdminTarifsScreen()),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -108,13 +109,31 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ),
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
 
 class RouterNotifier extends ChangeNotifier {
-  final Ref _ref;
+  bool _notificationPending = false;
+  bool _disposed = false;
 
-  RouterNotifier(this._ref) {
-    _ref.listen(authStateProvider, (_, __) => notifyListeners());
-    _ref.listen(currentPharmacieProvider, (_, __) => notifyListeners());
+  RouterNotifier(Ref ref) {
+    ref.listen(authStateProvider, (_, __) => _scheduleRefresh());
+    ref.listen(currentPharmacieProvider, (_, __) => _scheduleRefresh());
+  }
+
+  void _scheduleRefresh() {
+    if (_disposed || _notificationPending) return;
+    _notificationPending = true;
+    scheduleMicrotask(() {
+      _notificationPending = false;
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

@@ -1,10 +1,11 @@
 name: pharmaflow
-description: Ma Pharmacie - Gestion de stock pharmaceutique SaaS
+description: Ma Pharmacie - Gestion pharmaceutique dédiée à chaque client
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.10.0 <4.0.0'
+  flutter: '>=3.38.0'
 
 dependencies:
   flutter:
@@ -18,7 +19,6 @@ dependencies:
   cloud_firestore: ^4.15.0
   firebase_storage: ^11.6.0
   firebase_messaging: ^14.7.10
-  google_sign_in: ^6.2.1
 
   # State management
   flutter_riverpod: ^2.4.9
@@ -72,6 +72,9 @@ dependencies:
   google_fonts: ^6.2.1
 
 dev_dependencies:
+  sqflite_common_ffi: 2.3.6
+  sqlite3: ^2.9.0
+  fake_cloud_firestore: ^2.5.2
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0

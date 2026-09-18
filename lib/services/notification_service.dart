@@ -1,128 +1,158 @@
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import '../core/constants/app_constants.dart';
-import '../local_database/local_database.dart';
-
-/// NotificationService gère :
-/// - FCM (notifications push cloud)
-/// - Notifications locales (alertes stock, expiration)
-/// - Enregistrement des tokens pour le ciblage
 
 class NotificationService {
-  static final _fln = FlutterLocalNotificationsPlugin();
-  static final _fcm = FirebaseMessaging.instance;
+  static final _local = FlutterLocalNotificationsPlugin();
+  static String? _token;
+  static String? _boundUid;
+  static String? pendingRoute;
+  static void Function(String)? onNavigate;
+  static bool _initialized = false;
 
-  static const _channelStock = AndroidNotificationChannel(
-    'stock_alerts',
-    'Alertes Stock',
-    description: 'Notifications de stock faible et ruptures',
-    importance: Importance.high,
-  );
-
-  static const _channelAbonnement = AndroidNotificationChannel(
-    'subscription_alerts',
-    'Alertes Abonnement',
-    description: 'Rappels de renouvellement d\'abonnement',
-    importance: Importance.high,
-  );
+  static bool get supported =>
+      !kIsWeb &&
+      [
+        TargetPlatform.android,
+        TargetPlatform.iOS,
+      ].contains(defaultTargetPlatform);
 
   static Future<void> init() async {
-    // Demande de permission (essentiel pour iOS et Android 13+)
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      debugPrint('Permissions de notification refusées');
-      return;
+    if (!supported || _initialized) return;
+    try {
+      final messaging = FirebaseMessaging.instance;
+      final permission = await messaging.requestPermission();
+      if (permission.authorizationStatus == AuthorizationStatus.denied) return;
+      await _local.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          iOS: DarwinInitializationSettings(),
+        ),
+        onDidReceiveNotificationResponse: (response) =>
+            _route(response.payload),
+      );
+      await _local
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              'stock_alerts',
+              'Alertes pharmacie',
+              importance: Importance.high,
+            ),
+          );
+      FirebaseMessaging.onMessage.listen((message) async {
+        final notification = message.notification;
+        if (notification == null) return;
+        try {
+          await _local.show(
+            notification.hashCode,
+            notification.title,
+            notification.body,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'stock_alerts',
+                'Alertes pharmacie',
+                importance: Importance.high,
+                priority: Priority.high,
+              ),
+              iOS: DarwinNotificationDetails(),
+            ),
+            payload: message.data['type'] as String?,
+          );
+        } catch (error) {
+          debugPrint('Notification indisponible : $error');
+        }
+      });
+      FirebaseMessaging.onMessageOpenedApp.listen(
+        (message) => _route(message.data['type'] as String?),
+      );
+      messaging.onTokenRefresh.listen((value) {
+        _token = value;
+        final uid = _boundUid;
+        if (uid != null) unawaited(updateTokenForPharmacie(uid));
+      });
+      _initialized = true;
+      _token = await messaging.getToken();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) await updateTokenForPharmacie(uid);
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) _route(initial.data['type'] as String?);
+      final localLaunch = await _local.getNotificationAppLaunchDetails();
+      if (localLaunch?.didNotificationLaunchApp == true) {
+        _route(localLaunch?.notificationResponse?.payload);
+      }
+    } catch (error) {
+      debugPrint('Notifications indisponibles : $error');
     }
-
-    // Initialisation notifications locales
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    await _fln.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
-      onDidReceiveNotificationResponse: _onNotificationTap,
-    );
-
-    // Création des canaux Android
-    final androidPlugin = _fln.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(_channelStock);
-    await androidPlugin?.createNotificationChannel(_channelAbonnement);
-
-    // Écoute des messages en arrière-plan et premier plan
-    FirebaseMessaging.onMessage.listen(_onFcmMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen(_onFcmTapped);
-
-    // Token initial
-    final token = await _fcm.getToken();
-    if (token != null) {
-      _currentFcmToken = token;
-    }
-    _fcm.onTokenRefresh.listen((newToken) => _currentFcmToken = newToken);
   }
 
-  static String? _currentFcmToken;
-
-  /// Sauvegarde le token dans Firestore pour une pharmacie spécifique
   static Future<void> updateTokenForPharmacie(String pharmacieId) async {
-    if (_currentFcmToken == null) return;
+    if (!supported || FirebaseAuth.instance.currentUser?.uid != pharmacieId)
+      return;
+    _boundUid = pharmacieId;
     try {
+      _token ??= await FirebaseMessaging.instance.getToken().timeout(
+        const Duration(seconds: 5),
+      );
+      final token = _token;
+      if (token == null || _boundUid != pharmacieId) return;
       await FirebaseFirestore.instance
-          .collection(AppConstants.colPharmacies)
+          .collection('pharmacies')
           .doc(pharmacieId)
           .update({
-        'fcm_token': _currentFcmToken,
-        'last_token_update': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('Erreur sauvegarde token FCM: $e');
+            'fcm_tokens': FieldValue.arrayUnion([token]),
+            'last_token_update': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 5));
+    } catch (error) {
+      debugPrint('Enregistrement du token différé : $error');
     }
   }
 
-  static void _onFcmMessage(RemoteMessage message) {
-    final notification = message.notification;
-    if (notification == null) return;
-
-    _fln.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'general_alerts',
-          'Alertes Générales',
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
-      ),
-      payload: message.data['type'], // On passe le type pour le routing au clic
-    );
+  static Future<void> detachCurrentUser() async {
+    if (!supported) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final token = _token;
+    _boundUid = null;
+    _token = null;
+    pendingRoute = null;
+    try {
+      if (uid != null && token != null) {
+        await FirebaseFirestore.instance
+            .collection('pharmacies')
+            .doc(uid)
+            .update({
+              'fcm_tokens': FieldValue.arrayRemove([token]),
+            })
+            .timeout(const Duration(seconds: 5));
+      }
+    } catch (error) {
+      debugPrint('Retrait du token différé : $error');
+    }
+    try {
+      await FirebaseMessaging.instance.deleteToken().timeout(
+        const Duration(seconds: 5),
+      );
+      await _local.cancelAll();
+    } catch (error) {
+      debugPrint('Nettoyage des notifications indisponible : $error');
+    }
   }
 
-  static void _onFcmTapped(RemoteMessage message) {
-    _handleRouting(message.data['type']);
+  static void _route(String? type) {
+    final route = switch (type) {
+      'stock_alert' || 'expiration_alert' => '/stock',
+      _ => '/dashboard',
+    };
+    if (onNavigate == null) {
+      pendingRoute = route;
+    } else {
+      onNavigate!(route);
+    }
   }
-
-  static void _onNotificationTap(NotificationResponse response) {
-    _handleRouting(response.payload);
-  }
-
-  static void _handleRouting(String? type) {
-    // Ici on pourra utiliser le router pour naviguer
-    // ex: router.go('/stock') si type == 'stock_alert'
-    debugPrint('Navigation vers notification type: $type');
-  }
-
-  // ... (Garder le reste des méthodes de vérification de stock)
 }

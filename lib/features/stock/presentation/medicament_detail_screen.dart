@@ -6,6 +6,7 @@ import '../../../local_database/local_database.dart';
 import '../../../config/auth_provider.dart';
 import '../../../shared/widgets/pf_badge.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
+import '../../../repositories/medicament_repository.dart';
 
 class MedicamentDetailScreen extends ConsumerWidget {
   final String id;
@@ -13,6 +14,7 @@ class MedicamentDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(localChangesProvider);
     final pharmacie = ref.watch(currentPharmacieProvider).valueOrNull;
 
     return Scaffold(
@@ -22,14 +24,20 @@ class MedicamentDetailScreen extends ConsumerWidget {
             ? LocalDatabase.getMedicaments(pharmacie.id)
             : Future.value([]),
         builder: (ctx, snap) {
+          if (snap.hasError) {
+            return Center(
+              child: Text(
+                'Impossible de charger le médicament : ${snap.error}',
+              ),
+            );
+          }
           if (!snap.hasData) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
           }
           final meds = snap.data!;
-          final med = meds.firstWhere(
-            (m) => m['id'] == id,
-            orElse: () => {},
-          );
+          final med = meds.firstWhere((m) => m['id'] == id, orElse: () => {});
 
           if (med.isEmpty) {
             return Scaffold(
@@ -56,11 +64,13 @@ class MedicamentDetailScreen extends ConsumerWidget {
     dynamic pharmacie,
   ) {
     final now = DateTime.now();
-    final totalBoites =
-        (med['cartons'] as int) * (med['cartons_par_boite'] as int) +
-            (med['boites'] as int);
+    final totalBoites = med['unite_prix'] == 'flacon'
+        ? med['flacons'] as int
+        : (med['cartons'] as int) * (med['cartons_par_boite'] as int) +
+              (med['boites'] as int);
     final seuil = med['seuil_alerte'] as int;
-    final totalBase = (med['cartons'] as int) *
+    final totalBase =
+        (med['cartons'] as int) *
             (med['cartons_par_boite'] as int) *
             (med['boites_par_plaquette'] as int) *
             (med['plaquettes_par_comprime'] as int) +
@@ -85,11 +95,11 @@ class MedicamentDetailScreen extends ConsumerWidget {
     }
 
     final dateExpStr = med['date_expiration'] as String?;
-    final dateExp =
-        dateExpStr != null ? DateTime.tryParse(dateExpStr) : null;
+    final dateExp = dateExpStr != null ? DateTime.tryParse(dateExpStr) : null;
     final expire = dateExp != null && dateExp.isBefore(now);
-    final joursRestants =
-        dateExp != null ? dateExp.difference(now).inDays : null;
+    final joursRestants = dateExp != null
+        ? dateExp.difference(now).inDays
+        : null;
 
     return CustomScrollView(
       slivers: [
@@ -104,8 +114,11 @@ class MedicamentDetailScreen extends ConsumerWidget {
                 color: Colors.white.withOpacity(0.9),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
-                  size: 16, color: AppColors.textPrimary),
+              child: const Icon(
+                Icons.arrow_back_ios_new,
+                size: 16,
+                color: AppColors.textPrimary,
+              ),
             ),
             onPressed: () => context.pop(),
           ),
@@ -117,8 +130,11 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   color: Colors.white.withOpacity(0.9),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.edit_outlined,
-                    size: 16, color: AppColors.primary),
+                child: const Icon(
+                  Icons.edit_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
               ),
               onPressed: () => context.push('/medicament/$id/modifier'),
             ),
@@ -129,8 +145,11 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   color: Colors.white.withOpacity(0.9),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.delete_outline,
-                    size: 16, color: AppColors.danger),
+                child: const Icon(
+                  Icons.delete_outline,
+                  size: 16,
+                  color: AppColors.danger,
+                ),
               ),
               onPressed: () =>
                   _confirmerSuppression(context, ref, med, pharmacie),
@@ -142,7 +161,7 @@ class MedicamentDetailScreen extends ConsumerWidget {
                 gradient: LinearGradient(
                   colors: [
                     AppColors.primary.withOpacity(0.8),
-                    AppColors.primaryLight
+                    AppColors.primaryLight,
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -167,13 +186,17 @@ class MedicamentDetailScreen extends ConsumerWidget {
                                 med['image_url'],
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => const Icon(
-                                    Icons.medication_rounded,
-                                    color: Colors.white,
-                                    size: 44),
+                                  Icons.medication_rounded,
+                                  color: Colors.white,
+                                  size: 44,
+                                ),
                               ),
                             )
-                          : const Icon(Icons.medication_rounded,
-                              color: Colors.white, size: 44),
+                          : const Icon(
+                              Icons.medication_rounded,
+                              color: Colors.white,
+                              size: 44,
+                            ),
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -183,8 +206,7 @@ class MedicamentDetailScreen extends ConsumerWidget {
                     ),
                     Text(
                       med['categorie'] ?? '',
-                      style: AppTextStyles.body
-                          .copyWith(color: Colors.white70),
+                      style: AppTextStyles.body.copyWith(color: Colors.white70),
                     ),
                   ],
                 ),
@@ -204,13 +226,12 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   if (dateExp != null)
                     PfBadge(
-                      label: expire
-                          ? 'Expiré'
-                          : 'Expire dans $joursRestants j',
+                      label: expire ? 'Expiré' : 'Expire dans $joursRestants j',
                       color:
-                          expire || (joursRestants != null && joursRestants <= 30)
-                              ? AppColors.warning
-                              : AppColors.success,
+                          expire ||
+                              (joursRestants != null && joursRestants <= 30)
+                          ? AppColors.warning
+                          : AppColors.success,
                     ),
                 ],
               ),
@@ -218,10 +239,27 @@ class MedicamentDetailScreen extends ConsumerWidget {
 
               // Tarifs
               _card('Tarifs', [
-                _ligneInfo('Prix détail',
-                    '${(med['prix_detail'] as num).toStringAsFixed(0)} FC'),
-                _ligneInfo('Prix grossiste',
-                    '${(med['prix_grossiste'] as num).toStringAsFixed(0)} FC'),
+                _ligneInfo(
+                  'Unité des prix',
+                  med['unite_prix'] as String? ?? 'boite',
+                ),
+                _ligneInfo(
+                  'Prix d’achat',
+                  med['prix_achat'] == null
+                      ? 'À renseigner avant toute vente'
+                      : '${(med['prix_achat'] as num).toStringAsFixed(2)} FC',
+                ),
+                _ligneInfo(
+                  'Prix détail',
+                  '${(med['prix_detail'] as num).toStringAsFixed(2)} FC',
+                ),
+                if (ref.watch(wholesaleEnabledProvider))
+                  _ligneInfo(
+                    'Prix de gros',
+                    med['prix_grossiste'] == null
+                        ? 'Non renseigné'
+                        : '${(med['prix_grossiste'] as num).toStringAsFixed(2)} FC',
+                  ),
                 _ligneInfo('Fournisseur', med['fournisseur_nom'] ?? 'N/A'),
               ]),
               const SizedBox(height: 12),
@@ -237,12 +275,18 @@ class MedicamentDetailScreen extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Seuil alerte',
-                        style: AppTextStyles.label
-                            .copyWith(color: AppColors.textSecondary)),
-                    Text('$seuil boîtes',
-                        style: AppTextStyles.label
-                            .copyWith(color: AppColors.warning)),
+                    Text(
+                      'Seuil alerte',
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      '$seuil ${med['unite_prix'] == 'flacon' ? 'flacons' : 'boîtes'}',
+                      style: AppTextStyles.label.copyWith(
+                        color: AppColors.warning,
+                      ),
+                    ),
                   ],
                 ),
               ]),
@@ -250,12 +294,15 @@ class MedicamentDetailScreen extends ConsumerWidget {
 
               // Conversion
               _card('Conversion unités', [
-                _ligneInfo('1 carton',
-                    '${med['cartons_par_boite']} boîtes'),
-                _ligneInfo('1 boîte',
-                    '${med['boites_par_plaquette']} plaquettes'),
-                _ligneInfo('1 plaquette',
-                    '${med['plaquettes_par_comprime']} comprimés'),
+                _ligneInfo('1 carton', '${med['cartons_par_boite']} boîtes'),
+                _ligneInfo(
+                  '1 boîte',
+                  '${med['boites_par_plaquette']} plaquettes',
+                ),
+                _ligneInfo(
+                  '1 plaquette',
+                  '${med['plaquettes_par_comprime']} comprimés',
+                ),
               ]),
               const SizedBox(height: 12),
 
@@ -281,24 +328,30 @@ class MedicamentDetailScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.add_shopping_cart_outlined,
-                          size: 18),
+                      icon: const Icon(
+                        Icons.add_shopping_cart_outlined,
+                        size: 18,
+                      ),
                       label: const Text('Vendre'),
                       onPressed: () => context.go('/ventes'),
                       style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton.icon(
-                      icon: const Icon(Icons.edit_outlined,
-                          size: 18, color: Colors.white),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                       label: const Text('Modifier'),
-                      onPressed: () =>
-                          context.push('/medicament/$id/modifier'),
+                      onPressed: () => context.push('/medicament/$id/modifier'),
                       style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
                     ),
                   ),
                 ],
@@ -338,13 +391,14 @@ class MedicamentDetailScreen extends ConsumerWidget {
         children: [
           SizedBox(
             width: 120,
-            child: Text(label,
-                style: AppTextStyles.body
-                    .copyWith(color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: AppTextStyles.body.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
-          Expanded(
-              child:
-                  Text(value, style: AppTextStyles.bodyMedium)),
+          Expanded(child: Text(value, style: AppTextStyles.bodyMedium)),
         ],
       ),
     );
@@ -356,12 +410,12 @@ class MedicamentDetailScreen extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style:
-                  AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+          Text(
+            label,
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+          ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
             decoration: BoxDecoration(
               color: value > 0
                   ? AppColors.success.withOpacity(0.08)
@@ -371,9 +425,8 @@ class MedicamentDetailScreen extends ConsumerWidget {
             child: Text(
               '$value',
               style: AppTextStyles.label.copyWith(
-                  color: value > 0
-                      ? AppColors.success
-                      : AppColors.textMuted),
+                color: value > 0 ? AppColors.success : AppColors.textMuted,
+              ),
             ),
           ),
         ],
@@ -390,25 +443,37 @@ class MedicamentDetailScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Supprimer ce médicament ?'),
-        content:
-            Text('${med['nom']} sera archivé. Cette action peut être annulée par l\'administrateur.'),
+        content: Text(
+          '${med['nom']} sera archivé. Sa restauration nécessite une intervention technique.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Annuler'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.danger),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             onPressed: () async {
               Navigator.pop(ctx);
-              await LocalDatabase.deleteMedicament(med['id'] as String);
-              if (context.mounted) {
-                PfSnackbar.success(context, 'Médicament supprimé');
-                context.go('/stock');
+              try {
+                await ref
+                    .read(medicamentRepositoryProvider)
+                    .deleteMedicament(
+                      pharmacie.id as String,
+                      med['id'] as String,
+                    );
+                if (context.mounted) {
+                  PfSnackbar.success(
+                    context,
+                    'Médicament archivé sur cet appareil',
+                  );
+                  context.go('/stock');
+                }
+              } catch (error) {
+                if (context.mounted)
+                  PfSnackbar.error(context, error.toString());
               }
             },
             child: const Text('Supprimer'),

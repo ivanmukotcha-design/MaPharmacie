@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../config/auth_provider.dart';
@@ -12,68 +11,15 @@ import '../../../local_database/local_database.dart';
 import '../../../shared/widgets/pf_button.dart';
 import '../../../shared/widgets/pf_search_bar.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
+import 'panier.dart';
 
-/// État temporaire d'un article dans le panier
-class PanierItem {
-  final MedicamentModel medicament;
-  int quantite;
-  String unite;
-  double prixApplique;
-
-  PanierItem({
-    required this.medicament,
-    this.quantite = 1,
-    this.unite = 'boite',
-    required this.prixApplique,
-  });
-
-  double get sousTotal => prixApplique * quantite;
-  double get benefice => (prixApplique - medicament.prixGrossiste) * quantite;
+void _panierAction(BuildContext context, VoidCallback action) {
+  try {
+    action();
+  } catch (error) {
+    PfSnackbar.error(context, error.toString());
+  }
 }
-
-class PanierNotifier extends StateNotifier<List<PanierItem>> {
-  PanierNotifier() : super([]);
-
-  void ajouterMedicament(MedicamentModel med, double prix) {
-    final idx = state.indexWhere((i) => i.medicament.id == med.id);
-    if (idx >= 0) {
-      incrementer(idx);
-    } else {
-      state = [...state, PanierItem(medicament: med, prixApplique: prix)];
-    }
-  }
-
-  void incrementer(int idx) {
-    final updated = [...state];
-    updated[idx].quantite++;
-    state = updated;
-  }
-
-  void decrementer(int idx) {
-    final updated = [...state];
-    if (updated[idx].quantite > 1) {
-      updated[idx].quantite--;
-      state = updated;
-    } else {
-      supprimerItem(idx);
-    }
-  }
-
-  void supprimerItem(int idx) {
-    final updated = [...state];
-    updated.removeAt(idx);
-    state = updated;
-  }
-
-  void vider() => state = [];
-
-  double get total => state.fold(0, (sum, i) => sum + i.sousTotal);
-  double get beneficeTotal => state.fold(0, (sum, i) => sum + i.benefice);
-}
-
-final panierProvider = StateNotifierProvider<PanierNotifier, List<PanierItem>>((_) => PanierNotifier());
-final typeVenteProvider = StateProvider<String>((ref) => TypeVente.detail);
-final searchVenteProvider = StateProvider<String>((ref) => '');
 
 class VenteScreen extends ConsumerWidget {
   const VenteScreen({super.key});
@@ -91,27 +37,33 @@ class VenteScreen extends ConsumerWidget {
         actions: [
           if (panier.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: AppColors.danger),
+              icon: const Icon(
+                Icons.delete_sweep_outlined,
+                color: AppColors.danger,
+              ),
               onPressed: () => notifier.vider(),
             ),
         ],
       ),
       body: Column(
         children: [
-          const _TypeVenteToggle(),
+          if (ref.watch(wholesaleEnabledProvider)) const _TypeVenteToggle(),
           Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: PfSearchBar(
+              value: ref.watch(searchVenteProvider),
               hint: 'Rechercher un médicament...',
-              onChanged: (v) => ref.read(searchVenteProvider.notifier).state = v,
+              onChanged: (v) =>
+                  ref.read(searchVenteProvider.notifier).state = v,
             ),
           ),
           const _SearchResults(),
-          if (panier.isNotEmpty) _PanierHeader(count: panier.length, total: notifier.total),
+          if (panier.isNotEmpty)
+            _PanierHeader(count: panier.length, total: notifier.total),
           Expanded(
-            child: panier.isEmpty 
-              ? const _EmptyPanier() 
-              : _PanierList(panier: panier, notifier: notifier),
+            child: panier.isEmpty
+                ? const _EmptyPanier()
+                : _PanierList(panier: panier, notifier: notifier),
           ),
           if (panier.isNotEmpty) _BoutonFinaliser(typeVente: typeVente),
         ],
@@ -134,7 +86,12 @@ class _TypeVenteToggle extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          _toggleBtn(ref, TypeVente.detail, 'Détail', Icons.shopping_bag_outlined),
+          _toggleBtn(
+            ref,
+            TypeVente.detail,
+            'Détail',
+            Icons.shopping_bag_outlined,
+          ),
           _toggleBtn(ref, TypeVente.gros, 'Gros', Icons.inventory_2_outlined),
         ],
       ),
@@ -145,7 +102,15 @@ class _TypeVenteToggle extends ConsumerWidget {
     final isSelected = ref.watch(typeVenteProvider) == value;
     return Expanded(
       child: GestureDetector(
-        onTap: () => ref.read(typeVenteProvider.notifier).state = value,
+        onTap: () {
+          if (ref.read(venteEnCoursProvider)) return;
+          _panierAction(ref.context, () {
+            ref
+                .read(panierProvider.notifier)
+                .changerType(value == TypeVente.gros);
+            ref.read(typeVenteProvider.notifier).state = value;
+          });
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
@@ -182,13 +147,17 @@ class _SearchResults extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final query = ref.watch(searchVenteProvider);
+    ref.watch(localChangesProvider);
     final typeVente = ref.watch(typeVenteProvider);
     if (query.isEmpty) return const SizedBox.shrink();
 
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _searchMedicaments(ref, query),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+        if (snapshot.hasError)
+          return Text('Recherche impossible : ${snapshot.error}');
+        if (!snapshot.hasData || snapshot.data!.isEmpty)
+          return const SizedBox.shrink();
         final results = snapshot.data!;
 
         return Container(
@@ -212,20 +181,38 @@ class _SearchResults extends ConsumerWidget {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final mData = results[index];
-              final prix = typeVente == TypeVente.gros 
-                ? (mData['prix_grossiste'] as num).toDouble() 
-                : (mData['prix_detail'] as num).toDouble();
-              
+              final prix = typeVente == TypeVente.gros
+                  ? (mData['prix_grossiste'] as num?)?.toDouble()
+                  : (mData['prix_detail'] as num).toDouble();
+
               return ListTile(
                 title: Text(mData['nom'], style: AppTextStyles.label),
-                subtitle: Text('${prix.toStringAsFixed(0)} FC', style: AppTextStyles.small.copyWith(color: AppColors.primary)),
-                trailing: const Icon(Icons.add_circle_outline, color: AppColors.primary, size: 20),
-                contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 0),
-                onTap: () {
-                  final med = MedicamentModel.fromMap(mData, mData['id']);
-                  ref.read(panierProvider.notifier).ajouterMedicament(med, prix);
-                  ref.read(searchVenteProvider.notifier).state = '';
-                },
+                subtitle: Text(
+                  prix == null
+                      ? 'Tarif de gros non renseigné'
+                      : '${prix.toStringAsFixed(0)} FC',
+                  style: AppTextStyles.small.copyWith(color: AppColors.primary),
+                ),
+                trailing: const Icon(
+                  Icons.add_circle_outline,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: 0,
+                ),
+                onTap: prix == null
+                    ? null
+                    : () {
+                        _panierAction(context, () {
+                          final med = MedicamentModel.fromSql(mData);
+                          ref
+                              .read(panierProvider.notifier)
+                              .ajouterMedicament(med);
+                          ref.read(searchVenteProvider.notifier).state = '';
+                        });
+                      },
               );
             },
           ),
@@ -234,7 +221,10 @@ class _SearchResults extends ConsumerWidget {
     );
   }
 
-  Future<List<Map<String, dynamic>>> _searchMedicaments(WidgetRef ref, String query) async {
+  Future<List<Map<String, dynamic>>> _searchMedicaments(
+    WidgetRef ref,
+    String query,
+  ) async {
     final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
     if (pharmacie == null) return [];
     return LocalDatabase.searchMedicaments(pharmacie.id, query);
@@ -249,14 +239,22 @@ class _PanierHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
       child: Row(
         children: [
           Text('Panier ($count)', style: AppTextStyles.h4),
           const Spacer(),
           Text(
-            '${total.toStringAsFixed(0)} FC', 
-            style: AppTextStyles.h4.copyWith(color: AppColors.primary, fontWeight: FontWeight.bold),
+            '${total.toStringAsFixed(0)} FC',
+            style: AppTextStyles.h4.copyWith(
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -279,11 +277,42 @@ class _PanierList extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 4,
+            ),
             title: Text(item.medicament.nom, style: AppTextStyles.label),
-            subtitle: Text(
-              '${item.prixApplique.toStringAsFixed(0)} FC x ${item.quantite}',
-              style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item.prixApplique.toStringAsFixed(2)} FC x ${item.quantite}',
+                  style: AppTextStyles.small.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                DropdownButton<String>(
+                  value: item.unite,
+                  items:
+                      (item.medicament.unitePrix == 'flacon'
+                              ? ['flacon']
+                              : ['carton', 'boite', 'plaquette', 'comprimes'])
+                          .map(
+                            (unit) => DropdownMenuItem(
+                              value: unit,
+                              child: Text(unit),
+                            ),
+                          )
+                          .toList(),
+                  onChanged: (unit) {
+                    if (unit != null)
+                      _panierAction(
+                        context,
+                        () => notifier.changerUnite(index, unit),
+                      );
+                  },
+                ),
+              ],
             ),
             trailing: Container(
               decoration: BoxDecoration(
@@ -302,7 +331,10 @@ class _PanierList extends StatelessWidget {
                   Text('${item.quantite}', style: AppTextStyles.bodyMedium),
                   IconButton(
                     icon: const Icon(Icons.add, size: 18),
-                    onPressed: () => notifier.incrementer(index),
+                    onPressed: () => _panierAction(
+                      context,
+                      () => notifier.incrementer(index),
+                    ),
                     constraints: const BoxConstraints(),
                     padding: const EdgeInsets.all(AppSpacing.sm),
                   ),
@@ -324,10 +356,14 @@ class _EmptyPanier extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shopping_cart_outlined, size: 64, color: AppColors.textMuted.withOpacity(0.2)),
+          Icon(
+            Icons.shopping_cart_outlined,
+            size: 64,
+            color: AppColors.textMuted.withOpacity(0.2),
+          ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Votre panier est vide', 
+            'Votre panier est vide',
             style: AppTextStyles.body.copyWith(color: AppColors.textMuted),
           ),
         ],
@@ -350,7 +386,7 @@ class _BoutonFinaliserState extends ConsumerState<_BoutonFinaliser> {
   @override
   Widget build(BuildContext context) {
     final notifier = ref.read(panierProvider.notifier);
-    
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -367,28 +403,37 @@ class _BoutonFinaliserState extends ConsumerState<_BoutonFinaliser> {
       child: PfButton(
         label: 'Finaliser la vente (${notifier.total.toStringAsFixed(0)} FC)',
         isLoading: _loading,
-        onPressed: () => _procederVente(context, notifier),
+        onPressed: () => _procederVente(notifier),
         fullWidth: true,
       ),
     );
   }
 
-  Future<void> _procederVente(BuildContext context, PanierNotifier notifier) async {
+  Future<void> _procederVente(PanierNotifier notifier) async {
+    if (ref.read(venteEnCoursProvider)) return;
     final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
     if (pharmacie == null) return;
+    final busy = ref.read(venteEnCoursProvider.notifier);
+    final repository = ref.read(venteRepositoryProvider);
+    busy.state = true;
+    notifier.verrouiller(true);
 
     setState(() => _loading = true);
     try {
       final venteId = const Uuid().v4();
-      final items = notifier.state.map((item) => VenteItemModel(
-        medicamentId: item.medicament.id,
-        medicamentNom: item.medicament.nom,
-        quantite: item.quantite,
-        unite: item.unite,
-        prixUnitaire: item.prixApplique,
-        prixAchat: item.medicament.prixGrossiste,
-        sousTotal: item.sousTotal,
-      )).toList();
+      final items = notifier.items
+          .map(
+            (item) => VenteItemModel(
+              medicamentId: item.medicament.id,
+              medicamentNom: item.medicament.nom,
+              quantite: item.quantite,
+              unite: item.unite,
+              prixUnitaire: item.prixApplique,
+              prixAchat: item.medicament.coutPourUnite(item.unite),
+              sousTotal: item.sousTotal,
+            ),
+          )
+          .toList();
 
       final vente = VenteModel(
         id: venteId,
@@ -402,15 +447,21 @@ class _BoutonFinaliserState extends ConsumerState<_BoutonFinaliser> {
       );
 
       // Appel au Repository pour gérer la vente + la déduction de stock
-      await ref.read(venteRepositoryProvider).effectuerVente(vente);
+      await repository.effectuerVente(vente);
 
-      notifier.vider();
+      notifier.verrouiller(false);
+      if (notifier.mounted) notifier.vider();
       if (mounted) {
-        PfSnackbar.success(context, 'Vente enregistrée avec succès');
+        PfSnackbar.success(
+          context,
+          'Vente enregistrée sur cet appareil. Consultez l’état de synchronisation sur l’accueil.',
+        );
       }
     } catch (e) {
       if (mounted) PfSnackbar.error(context, 'Erreur lors de la vente: $e');
     } finally {
+      notifier.verrouiller(false);
+      if (busy.mounted) busy.state = false;
       if (mounted) setState(() => _loading = false);
     }
   }

@@ -1,28 +1,28 @@
-# Correction de l'erreur GlobalKey et Stabilisation du Router
+# Fix : Correction de l'ajout de médicament (Offline-First)
 
-L'erreur `GlobalKey was used multiple times inside one widget's child list [ink renderer]` est généralement causée par la recréation complète de l'arborescence des widgets lors d'un changement d'état global, ce qui arrive ici à cause de la configuration actuelle de `GoRouter`.
+L'objectif est de débloquer l'ajout de médicaments en garantissant que la sauvegarde locale réussit toujours, même sans connexion ou si les données de la pharmacie sont en cours de chargement.
+
+## Problèmes identifiés
+- **Blocage Silencieux** : Si `currentPharmacieProvider` est nul (chargement en cours), la fonction s'arrête sans erreur visible.
+- **Dépendance Réseau** : Le repository attend la réponse de Firestore avant de confirmer la réussite à l'utilisateur, ce qui peut bloquer l'UI si la connexion est instable.
 
 ## Modifications proposées
 
-### [Composant] Configuration (Config)
+### [Composant] Stock (Feature)
 
-#### [MODIFY] [router.dart](file:///E:/FLUTTER%20PROJECTS/pharmaflow/lib/config/router.dart)
-- Modification du `routerProvider` pour qu'il soit stable. Actuellement, il utilise `ref.watch`, ce qui recrée une nouvelle instance de `GoRouter` à chaque changement d'authentification ou de pharmacie. Cela provoque une reconstruction complète du Navigator et des erreurs de clés globales lors des transitions.
-- Utilisation d'un `refreshListenable` pour notifier `GoRouter` des changements d'état sans détruire l'instance du routeur.
+#### [MODIFY] [medicament_form_screen.dart](file:///E:/FLUTTER%20PROJECTS/pharmaflow/lib/features/stock/presentation/medicament_form_screen.dart)
+- Ajout d'une vérification explicite avec feedback (Snackbar) si les données de la pharmacie sont manquantes.
+- Amélioration de la gestion des erreurs pour afficher précisément ce qui échoue.
 
-### [Composant] Paramètres (Settings)
+### [Composant] Données (Repositories)
 
-#### [MODIFY] [screens_bundle.dart](file:///E:/FLUTTER%20PROJECTS/pharmaflow/lib/features/screens_bundle.dart)
-- Ajout de `ValueKey` explicites sur les éléments de liste dans `SettingsScreen`. Cela aidera Flutter à identifier correctement les widgets lors des reconstructions et évitera les conflits de rendu d'encre (`ink renderer`).
-
-### [Composant] Main (Root)
-
-#### [MODIFY] [main.dart](file:///E:/FLUTTER%20PROJECTS/pharmaflow/lib/main.dart)
-- Optimisation du `builder` de `MaterialApp` pour s'assurer que `AnnotatedRegion` n'est pas recréé inutilement avec des clés conflictuelles.
+#### [MODIFY] [medicament_repository.dart](file:///E:/FLUTTER%20PROJECTS/pharmaflow/lib/repositories/medicament_repository.dart)
+- **Priorité Locale** : Modification de `saveMedicament` pour que la partie Firestore soit exécutée en arrière-plan (sans `await` bloquant pour l'UI) ou via la queue de synchronisation si la connexion échoue.
+- **Robustesse SQLite** : Sécurisation du mapping des colonnes pour éviter les erreurs de "column mismatch".
 
 ## Plan de vérification
 
 ### Vérification Manuelle
-- Lancer l'application et naviguer vers les paramètres.
-- Vérifier que l'erreur `GlobalKey was used multiple times` ne s'affiche plus dans la console.
-- Confirmer que la navigation entre les onglets reste fluide.
+1. Tenter d'ajouter un médicament en mode avion (Simuler offline).
+2. Tenter d'ajouter un médicament avec connexion.
+3. Vérifier que la liste de stock se met à jour immédiatement après l'ajout.

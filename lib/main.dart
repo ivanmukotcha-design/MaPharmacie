@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,9 +8,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/constants/app_constants.dart';
 import 'core/theme/theme_provider.dart';
 import 'config/router.dart';
 import 'services/notification_service.dart';
+import 'services/sync_service.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,19 +29,33 @@ Future<void> main() async {
 
   // Initialisation de Firebase
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     debugPrint('Erreur lors de l\'initialisation de Firebase : $e');
+    runApp(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Impossible de démarrer Firebase. Vérifiez la configuration de cette application et redémarrez.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
   }
 
   // Initialisation du service de notifications
-  await NotificationService.init();
+  unawaited(NotificationService.init());
 
-  runApp(
-    const ProviderScope(
-      child: MaPharmacieApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: MaPharmacieApp()));
 }
 
 class MaPharmacieApp extends ConsumerWidget {
@@ -46,19 +65,28 @@ class MaPharmacieApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    ref.watch(syncServiceProvider);
+    NotificationService.onNavigate = router.go;
+    final pendingRoute = NotificationService.pendingRoute;
+    if (pendingRoute != null) {
+      NotificationService.pendingRoute = null;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => router.go(pendingRoute),
+      );
+    }
 
     return MaterialApp.router(
-      title: 'Ma Pharmacie',
+      title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      
+
       // Thèmes
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      
+
       // Navigation
       routerConfig: router,
-      
+
       // Localisation
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -71,26 +99,26 @@ class MaPharmacieApp extends ConsumerWidget {
         Locale('en', 'US'),
       ],
       locale: const Locale('fr', 'FR'), // Français par défaut
-      
       // Configuration globale de l'UI
       builder: (context, child) {
         final theme = Theme.of(context);
         final isDark = theme.brightness == Brightness.dark;
-        
+
         return AnnotatedRegion<SystemUiOverlayStyle>(
           key: const ValueKey('app_system_ui'),
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-            systemNavigationBarColor: isDark ? AppColors.darkBackground : Colors.white,
-            systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
+            systemNavigationBarColor: isDark
+                ? AppColors.darkBackground
+                : Colors.white,
+            systemNavigationBarIconBrightness: isDark
+                ? Brightness.light
+                : Brightness.dark,
           ),
-          child: MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.noScaling,
-            ),
-            child: child ?? const SizedBox.shrink(),
-          ),
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );

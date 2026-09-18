@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../config/auth_provider.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../shared/widgets/pf_button.dart';
 import '../../../shared/widgets/pf_text_field.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
@@ -19,7 +20,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _loading = false;
-  bool _googleLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -33,10 +33,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).loginWithUsername(
-        _usernameCtrl.text.trim().toLowerCase(),
-        _passwordCtrl.text,
-      );
+      await ref
+          .read(authServiceProvider)
+          .loginWithEmail(
+            _usernameCtrl.text.trim().toLowerCase(),
+            _passwordCtrl.text,
+          );
       if (mounted) context.go('/dashboard');
     } catch (e) {
       if (mounted) PfSnackbar.error(context, _parseError(e.toString()));
@@ -45,23 +47,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  Future<void> _loginGoogle() async {
-    setState(() => _googleLoading = true);
-    try {
-      await ref.read(authServiceProvider).loginWithGoogle();
-      if (mounted) context.go('/dashboard');
-    } catch (e) {
-      if (mounted) PfSnackbar.error(context, 'Erreur Google: ${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _googleLoading = false);
-    }
-  }
-
   String _parseError(String e) {
-    if (e.contains('user-not-found') || e.contains('wrong-password') || e.contains('invalid-credential')) {
+    if (e.contains('user-not-found') ||
+        e.contains('wrong-password') ||
+        e.contains('invalid-credential')) {
       return 'Email ou mot de passe incorrect';
     }
-    if (e.contains('too-many-requests')) return 'Trop de tentatives. Réessayez plus tard.';
+    if (e.contains('too-many-requests'))
+      return 'Trop de tentatives. Réessayez plus tard.';
     if (e.contains('network')) return 'Pas de connexion internet';
     return 'Erreur de connexion';
   }
@@ -96,13 +89,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Ma Pharmacie',
-                      style: AppTextStyles.h2.copyWith(color: AppColors.primary),
+                      AppConstants.appName,
+                      style: AppTextStyles.h2.copyWith(
+                        color: AppColors.primary,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Gestion pharmaceutique professionnelle',
-                      style: AppTextStyles.small.copyWith(color: AppColors.textSecondary),
+                      style: AppTextStyles.small.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -110,11 +107,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
               const SizedBox(height: 40),
 
-              Text('Connexion', style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
+              Text(
+                'Connexion',
+                style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
+              ),
               const SizedBox(height: 4),
               Text(
-                'Connectez-vous avec votre nom d\'utilisateur',
-                style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+                'Connectez-vous avec votre adresse email',
+                style: AppTextStyles.body.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
 
               const SizedBox(height: 28),
@@ -125,11 +127,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     PfTextField(
                       controller: _usernameCtrl,
-                      label: 'Nom d\'utilisateur',
-                      hint: 'Meta_Pharma',
-                      prefixIcon: Icons.person_outline,
+                      label: 'Email',
+                      hint: 'pharmacie@example.com',
+                      prefixIcon: Icons.email_outlined,
+                      keyboardType: TextInputType.emailAddress,
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Nom d\'utilisateur requis';
+                        if (v == null || !v.trim().contains('@'))
+                          return 'Email valide requis';
                         return null;
                       },
                     ),
@@ -142,14 +146,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       obscureText: _obscurePassword,
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
                           color: AppColors.textMuted,
                           size: 20,
                         ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Mot de passe requis';
+                        if (v == null || v.isEmpty)
+                          return 'Mot de passe requis';
                         if (v.length < 6) return 'Minimum 6 caractères';
                         return null;
                       },
@@ -165,7 +174,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   onPressed: () => _showResetDialog(),
                   child: Text(
                     'Mot de passe oublié ?',
-                    style: AppTextStyles.body.copyWith(color: AppColors.primary),
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ),
@@ -178,49 +189,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 fullWidth: true,
               ),
 
-              const SizedBox(height: 20),
-              _divider(),
-              const SizedBox(height: 20),
-
-              // Google button
-              _GoogleButton(loading: _googleLoading, onPressed: _loginGoogle),
-
-              const SizedBox(height: 32),
-              Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Pas encore de compte ? ',
-                      style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
-                    ),
-                    GestureDetector(
-                      onTap: () => context.go('/register'),
-                      child: Text(
-                        'Créer un compte',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.primary),
-                      ),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 24),
+              OutlinedButton(
+                onPressed: _loading ? null : () => context.push('/register'),
+                child: const Text('Créer un compte'),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Nouvelle pharmacie ? Créez son compte. Sur les autres appareils, connectez-vous avec le même email et le même mot de passe pour retrouver ses données.',
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _divider() {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: AppColors.border)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text('ou', style: AppTextStyles.small.copyWith(color: AppColors.textMuted)),
-        ),
-        Expanded(child: Divider(color: AppColors.border)),
-      ],
     );
   }
 
@@ -234,7 +215,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Entrez votre email pour recevoir un lien de réinitialisation.'),
+            const Text(
+              'Entrez votre email pour recevoir un lien de réinitialisation.',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: ctrl,
@@ -254,61 +237,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await ref.read(authServiceProvider).resetPassword(ctrl.text.trim());
-                if (mounted) {
+                await ref
+                    .read(authServiceProvider)
+                    .resetPassword(ctrl.text.trim());
+                if (mounted && ctx.mounted) {
                   Navigator.pop(ctx);
-                  PfSnackbar.success(context, 'Email envoyé ! Vérifiez votre boîte mail.');
+                  PfSnackbar.success(
+                    context,
+                    'Email envoyé ! Vérifiez votre boîte mail.',
+                  );
                 }
               } catch (_) {
-                if (mounted) PfSnackbar.error(context, 'Erreur. Vérifiez l\'email.');
+                if (mounted)
+                  PfSnackbar.error(context, 'Erreur. Vérifiez l\'email.');
               }
             },
             child: const Text('Envoyer'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _GoogleButton extends StatelessWidget {
-  final bool loading;
-  final VoidCallback onPressed;
-
-  const _GoogleButton({required this.loading, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: OutlinedButton(
-        onPressed: loading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        child: loading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/5.png',
-                    width: 24,
-                    height: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Continuer avec Google',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
-                  ),
-                ],
-              ),
       ),
     );
   }

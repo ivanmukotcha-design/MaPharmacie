@@ -1,141 +1,109 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// FIRESTORE SECURITY RULES — PharmaFlow SaaS
-// ═══════════════════════════════════════════════════════════════════════════
-//
-// Logique de sécurité :
-// - Chaque pharmacie accède uniquement à ses propres données (multi-tenant)
-// - Le Super Admin a accès en lecture/écriture à tout
-// - Les abonnements expirés limitent l'écriture côté client
-// ═══════════════════════════════════════════════════════════════════════════
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ─── HELPERS ──────────────────────────────────────────────────────────
-    
     function isAuthenticated() {
       return request.auth != null;
     }
-    
     function isOwner(pharmacieId) {
-      return request.auth.uid == pharmacieId;
+      return isAuthenticated() && request.auth.uid == pharmacieId;
     }
-    
-    function isSuperAdmin() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    function canRead(pharmacieId) {
+      return isOwner(pharmacieId) && exists(/databases/$(database)/documents/pharmacies/$(pharmacieId));
     }
-    
-    function pharmacieIsActive(pharmacieId) {
-      let pharma = get(/databases/$(database)/documents/pharmacies/$(pharmacieId));
-      return pharma.data.statut == 'actif';
+    function canWrite(pharmacieId) {
+      return canRead(pharmacieId);
     }
-    
-    function pharmacieCanRead(pharmacieId) {
-      let pharma = get(/databases/$(database)/documents/pharmacies/$(pharmacieId));
-      return pharma.data.statut == 'actif' || pharma.data.statut == 'expire';
+    function validTenant(pharmacieId) {
+      return request.resource.data.pharmacie_id == pharmacieId;
     }
-
-    // ─── SUPER ADMIN ──────────────────────────────────────────────────────
-    
-    match /admins/{adminId} {
-      allow read: if isSuperAdmin();
-      allow write: if false; // Modification manuelle uniquement
+    function validRevisionCreate() {
+      return request.resource.data.revision == 1;
     }
-
-    // ─── CONFIG (tarifs) ──────────────────────────────────────────────────
-    
-    match /config/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isSuperAdmin();
+    function validRevisionUpdate() {
+      return request.resource.data.revision == resource.data.get('revision', 0) + 1;
     }
-
-    // ─── PHARMACIES ───────────────────────────────────────────────────────
-    
+    function validMedicament() {
+      let data = request.resource.data;
+      let units = data.unites;
+      return data.nom is string && data.nom.size() > 0
+        && data.est_actif is bool
+        && data.prix_detail is number && data.prix_detail >= 0
+        && (data.prix_grossiste == null || (data.prix_grossiste is number && data.prix_grossiste >= 0))
+        && (data.prix_achat == null || (data.prix_achat is number && data.prix_achat >= 0))
+        && data.unite_prix in ['carton', 'boite', 'plaquette', 'comprimes', 'flacon']
+        && data.seuil_alerte is int && data.seuil_alerte >= 0
+        && units.cartons is int && units.cartons >= 0
+        && units.boites is int && units.boites >= 0
+        && units.plaquettes is int && units.plaquettes >= 0
+        && units.comprimes is int && units.comprimes >= 0
+        && units.flacons is int && units.flacons >= 0
+        && units.cartons_par_boite is int && units.cartons_par_boite > 0
+        && units.boites_par_plaquette is int && units.boites_par_plaquette > 0
+        && units.plaquettes_par_comprime is int && units.plaquettes_par_comprime > 0
+        && (data.unite_prix == 'flacon'
+          ? units.cartons == 0 && units.boites == 0 && units.plaquettes == 0 && units.comprimes == 0
+          : units.flacons == 0);
+    }
     match /pharmacies/{pharmacieId} {
-      // Lecture : propriétaire ou admin
-      allow read: if isOwner(pharmacieId) || isSuperAdmin();
-      
-      // Création : utilisateur authentifié (inscription)
-      allow create: if isAuthenticated() && isOwner(pharmacieId);
-      
-      // Modification : admin uniquement (statut, suspension)
-      // La pharmacie ne peut pas modifier son propre statut
-      allow update: if isSuperAdmin() ||
-        (isOwner(pharmacieId) && 
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['statut', 'suspended_at', 'code']));
-      
-      // Suppression : admin uniquement
-      allow delete: if isSuperAdmin();
+      allow get: if isOwner(pharmacieId);
+      allow list: if false;
+      allow create: if isOwner(pharmacieId)
+        && request.resource.data.keys().hasOnly(['code', 'nom', 'username', 'email', 'telephone',
+          'adresse', 'ville', 'pays', 'tarifs_gros_actifs', 'proprietaire_nom', 'created_at'])
+        && request.resource.data.tarifs_gros_actifs == false
+        && request.resource.data.code == 'PHR-' + pharmacieId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.nom is string && request.resource.data.nom.size() > 0
+        && request.resource.data.created_at == request.time;
+      allow update: if isOwner(pharmacieId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'nom', 'username', 'telephone', 'adresse', 'ville', 'pays', 'proprietaire_nom',
+          'fcm_tokens', 'last_token_update', 'tarifs_gros_actifs'])
+        && request.resource.data.get('tarifs_gros_actifs', false) is bool;
+      allow delete: if false;
 
-      // ─── MÉDICAMENTS ──────────────────────────────────────────────────
-      
       match /medicaments/{medicamentId} {
-        allow read: if (isOwner(pharmacieId) && pharmacieCanRead(pharmacieId)) || isSuperAdmin();
-        allow create, update: if (isOwner(pharmacieId) && pharmacieIsActive(pharmacieId)) || isSuperAdmin();
-        allow delete: if (isOwner(pharmacieId) && pharmacieIsActive(pharmacieId)) || isSuperAdmin();
+        allow read: if canRead(pharmacieId);
+        allow create: if (canWrite(pharmacieId))
+          && validTenant(pharmacieId) && validMedicament() && validRevisionCreate();
+        allow update: if (canWrite(pharmacieId))
+          && validTenant(pharmacieId) && validMedicament() && validRevisionUpdate();
+        allow delete: if false;
       }
-
-      // ─── VENTES ───────────────────────────────────────────────────────
-      
-      match /ventes/{venteId} {
-        allow read: if (isOwner(pharmacieId) && pharmacieCanRead(pharmacieId)) || isSuperAdmin();
-        allow create: if (isOwner(pharmacieId) && pharmacieIsActive(pharmacieId)) || isSuperAdmin();
-        allow update, delete: if isSuperAdmin(); // Pas de modif de vente par l'utilisateur
-      }
-
-      // ─── FOURNISSEURS ─────────────────────────────────────────────────
-      
       match /fournisseurs/{fournisseurId} {
-        allow read: if (isOwner(pharmacieId) && pharmacieCanRead(pharmacieId)) || isSuperAdmin();
-        allow write: if (isOwner(pharmacieId) && pharmacieIsActive(pharmacieId)) || isSuperAdmin();
+        allow read: if canRead(pharmacieId);
+        allow create: if (canWrite(pharmacieId)) && validTenant(pharmacieId)
+          && request.resource.data.nom.size() > 0 && request.resource.data.est_actif is bool
+          && validRevisionCreate();
+        allow update: if (canWrite(pharmacieId)) && validTenant(pharmacieId)
+          && request.resource.data.nom.size() > 0 && request.resource.data.est_actif is bool
+          && validRevisionUpdate();
+        allow delete: if false;
       }
-
-      // ─── ACTIVITÉS ────────────────────────────────────────────────────
-      
+      match /ventes/{venteId} {
+        allow read: if canRead(pharmacieId);
+        allow create: if (canWrite(pharmacieId)) && validTenant(pharmacieId)
+          && request.resource.data.type_vente in ['gros', 'detail']
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0 && request.resource.data.items.size() <= 100
+          && request.resource.data.total_ht is number && request.resource.data.total_ht >= 0
+          && request.resource.data.total_ttc is number && request.resource.data.total_ttc >= 0
+          && request.resource.data.benefice is number
+          && request.resource.data.date is timestamp;
+        allow update, delete: if false;
+      }
       match /activites/{activiteId} {
-        allow read: if (isOwner(pharmacieId) && pharmacieCanRead(pharmacieId)) || isSuperAdmin();
-        allow create: if isOwner(pharmacieId) || isSuperAdmin();
-        allow update, delete: if isSuperAdmin();
+        allow read: if canRead(pharmacieId);
+        allow create: if canWrite(pharmacieId) && validTenant(pharmacieId);
+        allow update, delete: if false;
       }
-
-      // ─── NOTIFICATIONS ────────────────────────────────────────────────
-      
       match /notifications/{notifId} {
-        allow read: if isOwner(pharmacieId) || isSuperAdmin();
-        allow create: if isSuperAdmin(); // Seul l'admin peut créer
-        allow update: if isOwner(pharmacieId); // L'utilisateur peut marquer comme lu
-        allow delete: if isSuperAdmin();
+        allow read: if isOwner(pharmacieId);
+        allow create, delete: if false;
+        allow update: if isOwner(pharmacieId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lu'])
+          && request.resource.data.lu is bool;
       }
-    }
-
-    // ─── ABONNEMENTS ──────────────────────────────────────────────────────
-    
-    match /abonnements/{abonnementId} {
-      allow read: if isAuthenticated() &&
-        (resource.data.pharmacie_id == request.auth.uid || isSuperAdmin());
-      
-      allow create: if isAuthenticated() &&
-        request.resource.data.pharmacie_id == request.auth.uid;
-      
-      allow update: if isSuperAdmin(); // Seul l'admin valide les paiements
-      
-      allow delete: if isSuperAdmin();
-    }
-
-    // ─── PAIEMENTS ────────────────────────────────────────────────────────
-    
-    match /paiements/{paiementId} {
-      allow read: if isAuthenticated() &&
-        (resource.data.pharmacie_id == request.auth.uid || isSuperAdmin());
-      
-      allow create: if isAuthenticated() &&
-        request.resource.data.pharmacie_id == request.auth.uid;
-      
-      // Seul l'admin peut valider/modifier un paiement
-      allow update: if isSuperAdmin();
-      allow delete: if isSuperAdmin();
     }
   }
 }

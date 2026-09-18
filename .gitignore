@@ -6,7 +6,6 @@
 .pub-cache/
 .pub/
 build/
-pubspec.lock
 
 # Firebase
 google-services.json
@@ -59,3 +58,4 @@ lib/config/env.dart
 
 # Tests
 coverage/
+*-debug.log

@@ -1,1 +1,5 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"mapharmacie-d56c2","appId":"1:652393962295:android:d036f42bf967a0721658b2","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"mapharmacie-d56c2","configurations":{"android":"1:652393962295:android:d036f42bf967a0721658b2","ios":"1:652393962295:ios:0939f1d45878aff21658b2","macos":"1:652393962295:ios:0939f1d45878aff21658b2","web":"1:652393962295:web:69474db888c6cacb1658b2","windows":"1:652393962295:web:e09478c5801566031658b2"}}}}}}
+{
+  "firestore": {"rules": "firestore.rules", "indexes": "firestore.indexes.json"},
+  "emulators": {"firestore": {"host": "127.0.0.1", "port": 8080}, "auth": {"host": "127.0.0.1", "port": 9099}, "ui": {"enabled": false}, "singleProjectMode": true},
+  "flutter": {"platforms": {"android": {"default": {"projectId": "mapharmacie-d56c2", "appId": "1:652393962295:android:d036f42bf967a0721658b2", "fileOutput": "android/app/google-services.json"}}, "dart": {"lib/firebase_options.dart": {"projectId": "mapharmacie-d56c2", "configurations": {"android": "1:652393962295:android:d036f42bf967a0721658b2", "ios": "1:652393962295:ios:0939f1d45878aff21658b2", "macos": "1:652393962295:ios:0939f1d45878aff21658b2", "web": "1:652393962295:web:69474db888c6cacb1658b2", "windows": "1:652393962295:web:e09478c5801566031658b2"}}}}}
+}

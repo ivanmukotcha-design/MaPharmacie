@@ -17,6 +17,7 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(localChangesProvider);
     final pharmacie = ref.watch(currentPharmacieProvider).valueOrNull;
     if (pharmacie == null) return const Scaffold();
 
@@ -32,8 +33,14 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
         ],
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: LocalDatabase.getVentes(pharmacie.id, dateDebut: _debut, dateFin: _fin),
+        future: LocalDatabase.getVentes(
+          pharmacie.id,
+          dateDebut: _debut,
+          dateFin: _fin,
+        ),
         builder: (ctx, snap) {
+          if (snap.hasError)
+            return Center(child: Text('Erreur de lecture : ${snap.error}'));
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -43,10 +50,19 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.receipt_long_outlined, size: 64, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.receipt_long_outlined,
+                    size: 64,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(height: 12),
                   Text('Aucune vente', style: AppTextStyles.h4),
-                  Text('Les ventes apparaîtront ici', style: AppTextStyles.body.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    'Les ventes apparaîtront ici',
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -71,11 +87,23 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(child: _summaryItem('Ventes totales', '${totalVentes.toStringAsFixed(0)} FC')),
+                    Expanded(
+                      child: _summaryItem(
+                        'Ventes totales',
+                        '${totalVentes.toStringAsFixed(0)} FC',
+                      ),
+                    ),
                     Container(width: 1, height: 40, color: Colors.white24),
-                    Expanded(child: _summaryItem('Bénéfices', '${totalBenefices.toStringAsFixed(0)} FC')),
+                    Expanded(
+                      child: _summaryItem(
+                        'Bénéfices',
+                        '${totalBenefices.toStringAsFixed(0)} FC',
+                      ),
+                    ),
                     Container(width: 1, height: 40, color: Colors.white24),
-                    Expanded(child: _summaryItem('Transactions', '${ventes.length}')),
+                    Expanded(
+                      child: _summaryItem('Transactions', '${ventes.length}'),
+                    ),
                   ],
                 ),
               ),
@@ -97,9 +125,18 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
   Widget _summaryItem(String label, String value) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(label, style: AppTextStyles.caption.copyWith(color: Colors.white70)),
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(color: Colors.white70),
+        ),
       ],
     );
   }
@@ -110,11 +147,13 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
       firstDate: DateTime(2024),
       lastDate: DateTime.now(),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: AppColors.primary)),
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+        ),
         child: child!,
       ),
     );
-    if (result != null) {
+    if (result != null && mounted) {
       setState(() {
         _debut = result.start;
         _fin = result.end;
@@ -141,9 +180,11 @@ class _VenteRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40, height: 40,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: (isGros ? AppColors.secondary : AppColors.primary).withOpacity(0.1),
+              color: (isGros ? AppColors.secondary : AppColors.primary)
+                  .withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
@@ -157,11 +198,16 @@ class _VenteRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(isGros ? 'Vente Grossiste' : 'Vente Détail', style: AppTextStyles.label),
+                Text(
+                  isGros ? 'Vente Grossiste' : 'Vente Détail',
+                  style: AppTextStyles.label,
+                ),
                 if (date != null)
                   Text(
                     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textMuted,
+                    ),
                   ),
               ],
             ),

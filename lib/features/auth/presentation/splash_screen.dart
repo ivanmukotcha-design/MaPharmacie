@@ -1,9 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../config/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -13,28 +10,6 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    _navigateToNext();
-  }
-
-  Future<void> _navigateToNext() async {
-    // Délai de 2 secondes
-    await Future.delayed(const Duration(seconds: 2));
-    
-    if (!mounted) return;
-
-    final authState = ref.read(authStateProvider);
-    
-    // Si déjà connecté, on va au dashboard, sinon au login
-    if (authState.valueOrNull != null) {
-      context.go('/dashboard');
-    } else {
-      context.go('/login');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

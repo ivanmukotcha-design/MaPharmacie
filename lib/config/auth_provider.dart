@@ -1,173 +1,142 @@
-import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-
 import '../models/models.dart';
-import '../core/constants/app_constants.dart';
 import '../services/notification_service.dart';
+import '../core/utils/validators.dart';
 
-// Providers de base Firebase pour l'injection de dépendances
-final firestoreProvider = Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
+final firestoreProvider = Provider<FirebaseFirestore>(
+  (ref) => FirebaseFirestore.instance,
+);
+final firebaseAuthProvider = Provider<FirebaseAuth>(
+  (ref) => FirebaseAuth.instance,
+);
+final authStateProvider = StreamProvider<User?>(
+  (ref) => ref.watch(firebaseAuthProvider).authStateChanges(),
+);
+final currentUserProvider = Provider<User?>(
+  (ref) => ref.watch(authStateProvider).valueOrNull,
+);
 
-/// Provider qui écoute les changements d'état de l'authentification
-final authStateProvider = StreamProvider<User?>((ref) {
-  return ref.watch(firebaseAuthProvider).authStateChanges();
-});
-
-/// Provider pour récupérer l'utilisateur actuel
-final currentUserProvider = Provider<User?>((ref) {
-  return ref.watch(authStateProvider).valueOrNull;
-});
-
-/// Source de vérité pour la pharmacie connectée
 final currentPharmacieProvider = StreamProvider<PharmacieModel?>((ref) {
   final user = ref.watch(currentUserProvider);
   if (user == null) return Stream.value(null);
-
-  return ref.watch(firestoreProvider)
-      .collection(AppConstants.colPharmacies)
+  return ref
+      .watch(firestoreProvider)
+      .collection('pharmacies')
       .doc(user.uid)
       .snapshots()
-      .map((snap) {
-        if (!snap.exists) return null;
-        return PharmacieModel.fromMap(snap.data()!, snap.id);
-      });
+      .map(
+        (snapshot) => snapshot.exists
+            ? PharmacieModel.fromMap(snapshot.data()!, snapshot.id)
+            : null,
+      );
 });
 
-/// Service d'authentification
-final authServiceProvider = Provider<AuthService>((ref) {
-  return AuthService(ref.watch(firestoreProvider), ref.watch(firebaseAuthProvider));
+final pharmacieAuthorizedProvider = Provider<bool>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final profile = ref.watch(currentPharmacieProvider);
+  return user != null &&
+      !profile.hasError &&
+      profile.valueOrNull?.id == user.uid;
 });
+
+final wholesaleEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(pharmacieAuthorizedProvider) &&
+      ref.watch(currentPharmacieProvider).valueOrNull?.tarifsGrosActifs == true,
+);
+
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider),
+  ),
+);
 
 class AuthService {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
-
   AuthService(this._firestore, this._auth);
 
   Future<UserCredential> loginWithEmail(String email, String password) async {
-    final creds = await _auth.signInWithEmailAndPassword(email: email, password: password);
-    if (creds.user != null) {
-      // Met à jour le token FCM au login
-      await NotificationService.updateTokenForPharmacie(creds.user!.uid);
-    }
-    return creds;
-  }
-
-  Future<UserCredential> loginWithUsername(String username, String password) async {
-    // 1. Rechercher l'email associé au nom d'utilisateur dans Firestore
-    final snapshot = await _firestore
-        .collection(AppConstants.colPharmacies)
-        .where('username', isEqualTo: username)
-        .limit(1)
-        .get();
-
-    if (snapshot.docs.isEmpty) {
-      throw Exception('Nom d\'utilisateur introuvable');
-    }
-
-    final email = snapshot.docs.first.data()['email'] as String;
-
-    // 2. Se connecter avec l'email trouvé
-    return loginWithEmail(email, password);
-  }
-
-  Future<UserCredential> loginWithGoogle() async {
-    final account = await _googleSignIn.signIn();
-    if (account == null) throw Exception('Connexion Google annulée');
-    final auth = await account.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: auth.accessToken,
-      idToken: auth.idToken,
+    final result = await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
     );
-    final creds = await _auth.signInWithCredential(credential);
-    if (creds.user != null) {
-      await NotificationService.updateTokenForPharmacie(creds.user!.uid);
+    if (result.user != null) {
+      await NotificationService.updateTokenForPharmacie(result.user!.uid);
     }
-    return creds;
+    return result;
   }
 
-  Future<UserCredential> registerWithEmail(String email, String password) async {
-    final creds = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-    if (creds.user != null) {
-      // Important : Enregistre le token aussi à l'inscription
-      await NotificationService.updateTokenForPharmacie(creds.user!.uid);
+  Future<void> createAccount(String email, String password) async {
+    if (_auth.currentUser != null)
+      throw StateError('Une session est déjà ouverte.');
+    if (validateEmail(email) != null || validatePassword(password) != null) {
+      throw const FormatException('Email ou mot de passe invalide.');
     }
-    return creds;
+    await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
   }
 
-  Future<void> resetPassword(String email) async {
-    await _auth.sendPasswordResetEmail(email: email);
-  }
+  Future<void> resetPassword(String email) =>
+      _auth.sendPasswordResetEmail(email: email.trim());
 
   Future<void> logout() async {
+    await NotificationService.detachCurrentUser();
     await _auth.signOut();
-    await _googleSignIn.signOut();
-  }
-
-  Future<bool> isAdmin(String userId) async {
-    final doc = await _firestore.collection('admins').doc(userId).get();
-    return doc.exists;
   }
 
   Future<PharmacieModel> creerPharmacie({
-    required String userId,
     required String nom,
-    required String username,
-    required String email,
     required String telephone,
     required String adresse,
     required String ville,
     required String pays,
-    required String typePharmacie,
     required String proprietaireNom,
   }) async {
-    final code = await _generateCode();
-
-    final pharmaData = {
-      'code': code,
-      'nom': nom,
-      'username': username,
-      'email': email,
-      'telephone': telephone,
-      'adresse': adresse,
-      'ville': ville,
-      'pays': pays,
-      'type_pharmacie': typePharmacie,
-      'statut': PharmacieStatut.actif,
-      'proprietaire_nom': proprietaireNom,
-      'created_at': FieldValue.serverTimestamp(),
-    };
-
-    await _firestore
-        .collection(AppConstants.colPharmacies)
-        .doc(userId)
-        .set(pharmaData);
-
-    return PharmacieModel(
-      id: userId,
-      code: code,
-      nom: nom,
-      username: username,
-      email: email,
-      telephone: telephone,
-      adresse: adresse,
-      ville: ville,
-      pays: pays,
-      typePharmacie: typePharmacie,
-      statut: PharmacieStatut.actif,
-      proprietaireNom: proprietaireNom,
+    final user = _auth.currentUser;
+    if (user == null || user.email == null)
+      throw StateError('Connexion requise.');
+    final values = [nom, telephone, adresse, ville, pays, proprietaireNom];
+    if (values.any((value) => value.trim().isEmpty)) {
+      throw const FormatException(
+        'Complétez les informations de la pharmacie.',
+      );
+    }
+    if (_auth.currentUser?.uid != user.uid)
+      throw StateError('La session a changé.');
+    final profile = PharmacieModel(
+      id: user.uid,
+      code: 'PHR-${user.uid}',
+      nom: nom.trim(),
+      username: '',
+      email: user.email!,
+      telephone: telephone.trim(),
+      adresse: adresse.trim(),
+      ville: ville.trim(),
+      pays: pays.trim(),
+      proprietaireNom: proprietaireNom.trim(),
       createdAt: DateTime.now(),
     );
-  }
-
-  Future<String> _generateCode() async {
-    final count = await _firestore.collection(AppConstants.colPharmacies).count().get();
-    final num = (count.count ?? 0) + 1;
-    return 'PHR-${num.toString().padLeft(4, '0')}';
+    final reference = _firestore.collection('pharmacies').doc(user.uid);
+    await _firestore.runTransaction((transaction) async {
+      final previous = await transaction.get(reference);
+      if (previous.exists)
+        throw StateError(
+          'La pharmacie est déjà configurée. Rechargez votre profil.',
+        );
+      if (_auth.currentUser?.uid != user.uid)
+        throw StateError('La session a changé.');
+      transaction.set(reference, {
+        ...profile.toMap(),
+        'created_at': FieldValue.serverTimestamp(),
+      });
+    });
+    await NotificationService.updateTokenForPharmacie(user.uid);
+    return profile;
   }
 }

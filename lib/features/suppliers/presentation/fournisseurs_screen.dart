@@ -26,20 +26,29 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(title: const Text('Fournisseurs')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(context),
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: Text('Ajouter', style: AppTextStyles.label.copyWith(color: Colors.white)),
-      ),
+      floatingActionButton: pharmacie == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddDialog(context),
+              backgroundColor: AppColors.primary,
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: Text(
+                'Ajouter',
+                style: AppTextStyles.label.copyWith(color: Colors.white),
+              ),
+            ),
       body: pharmacie == null
           ? const Center(child: CircularProgressIndicator())
           : FutureBuilder<List<FournisseurModel>>(
-              future: ref.read(fournisseurRepositoryProvider).getFournisseurs(pharmacie.id),
+              future: ref.watch(fournisseursProvider.future),
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+                if (snap.hasError)
+                  return Center(
+                    child: Text('Chargement impossible : ${snap.error}'),
+                  );
                 final fournisseurs = snap.data ?? [];
 
                 if (fournisseurs.isEmpty) {
@@ -49,15 +58,23 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.local_shipping_outlined,
-                              size: 64, color: AppColors.textMuted.withValues(alpha: 0.2)),
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 64,
+                            color: AppColors.textMuted.withValues(alpha: 0.2),
+                          ),
                           const SizedBox(height: AppSpacing.md),
-                          const Text('Aucun fournisseur', style: AppTextStyles.h4),
+                          const Text(
+                            'Aucun fournisseur',
+                            style: AppTextStyles.h4,
+                          ),
                           const SizedBox(height: AppSpacing.sm),
                           Text(
                             'Ajoutez vos fournisseurs partenaires',
                             textAlign: TextAlign.center,
-                            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
+                            style: AppTextStyles.body.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -66,12 +83,22 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
                 }
 
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 100),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.md,
+                    AppSpacing.md,
+                    100,
+                  ),
                   itemCount: fournisseurs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AppSpacing.sm),
                   itemBuilder: (_, i) {
                     final f = fournisseurs[i];
-                    return _FournisseurCard(fournisseur: f, onDelete: () => _delete(f));
+                    return _FournisseurCard(
+                      fournisseur: f,
+                      onDelete: () => _delete(f),
+                      onEdit: () => _showAddDialog(context, f),
+                    );
                   },
                 );
               },
@@ -83,42 +110,54 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer ?'),
-        content: Text('Voulez-vous supprimer le fournisseur ${f.nom} ?'),
+        title: const Text('Archiver ?'),
+        content: Text(
+          'Archiver ${f.nom} sans supprimer les références historiques ?',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Annuler')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Supprimer')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Archiver'),
+          ),
         ],
       ),
     );
 
-    if (confirmed == true) {
-      await ref
-          .read(fournisseurRepositoryProvider)
-          .deleteFournisseur(f.pharmacieId, f.id);
-      setState(() {});
+    if (confirmed == true && mounted) {
+      try {
+        await ref
+            .read(fournisseurRepositoryProvider)
+            .deleteFournisseur(f.pharmacieId, f.id);
+      } catch (error) {
+        if (mounted) PfSnackbar.error(context, 'Archivage impossible : $error');
+      }
     }
   }
 
-  void _showAddDialog(BuildContext context) {
+  void _showAddDialog(BuildContext context, [FournisseurModel? fournisseur]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _AddFournisseurSheet(onAdded: () => setState(() {})),
+      builder: (ctx) => _AddFournisseurSheet(fournisseur: fournisseur),
     );
   }
 }
 
 class _FournisseurCard extends StatelessWidget {
   final FournisseurModel fournisseur;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
 
-  const _FournisseurCard({required this.fournisseur, required this.onDelete});
+  const _FournisseurCard({
+    required this.fournisseur,
+    this.onDelete,
+    this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -135,11 +174,14 @@ class _FournisseurCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-                color: AppColors.secondary.withOpacity(0.1),
-                borderRadius: AppBorderRadius.md),
+              color: AppColors.secondary.withOpacity(0.1),
+              borderRadius: AppBorderRadius.md,
+            ),
             child: Center(
               child: Text(
-                fournisseur.nom[0].toUpperCase(),
+                fournisseur.nom.isEmpty
+                    ? '?'
+                    : fournisseur.nom[0].toUpperCase(),
                 style: AppTextStyles.h2.copyWith(color: AppColors.secondary),
               ),
             ),
@@ -151,18 +193,34 @@ class _FournisseurCard extends StatelessWidget {
               children: [
                 Text(fournisseur.nom, style: AppTextStyles.label),
                 if (fournisseur.telephone.isNotEmpty)
-                  Text(fournisseur.telephone,
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textMuted)),
+                  Text(
+                    fournisseur.telephone,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.phone_outlined, color: AppColors.primary, size: 22),
+            icon: const Icon(
+              Icons.phone_outlined,
+              color: AppColors.primary,
+              size: 22,
+            ),
             onPressed: () => _appeler(fournisseur.telephone),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 22),
+            icon: const Icon(
+              Icons.delete_outline,
+              color: AppColors.danger,
+              size: 22,
+            ),
             onPressed: onDelete,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 22),
+            onPressed: onEdit,
           ),
         ],
       ),
@@ -176,9 +234,9 @@ class _FournisseurCard extends StatelessWidget {
 }
 
 class _AddFournisseurSheet extends ConsumerStatefulWidget {
-  final VoidCallback onAdded;
+  final FournisseurModel? fournisseur;
 
-  const _AddFournisseurSheet({required this.onAdded});
+  const _AddFournisseurSheet({this.fournisseur});
 
   @override
   ConsumerState<_AddFournisseurSheet> createState() =>
@@ -193,63 +251,103 @@ class _AddFournisseurSheetState extends ConsumerState<_AddFournisseurSheet> {
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    final supplier = widget.fournisseur;
+    if (supplier != null) {
+      _nomCtrl.text = supplier.nom;
+      _telCtrl.text = supplier.telephone;
+      _emailCtrl.text = supplier.email;
+      _adresseCtrl.text = supplier.adresse;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nomCtrl.dispose();
+    _telCtrl.dispose();
+    _emailCtrl.dispose();
+    _adresseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg),
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+      ),
       decoration: const BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
               child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: AppColors.divider,
-                      borderRadius: AppBorderRadius.sm))),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Nouveau fournisseur', style: AppTextStyles.h3),
-          const SizedBox(height: AppSpacing.lg),
-          PfTextField(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: AppBorderRadius.sm,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              widget.fournisseur == null
+                  ? 'Nouveau fournisseur'
+                  : 'Modifier le fournisseur',
+              style: AppTextStyles.h3,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            PfTextField(
               controller: _nomCtrl,
               label: 'Nom du fournisseur *',
-              prefixIcon: Icons.business_outlined),
-          const SizedBox(height: AppSpacing.sm),
-          PfTextField(
+              prefixIcon: Icons.business_outlined,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            PfTextField(
               controller: _telCtrl,
               label: 'Téléphone',
               prefixIcon: Icons.phone_outlined,
-              keyboardType: TextInputType.phone),
-          const SizedBox(height: AppSpacing.sm),
-          PfTextField(
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            PfTextField(
               controller: _emailCtrl,
               label: 'Email',
               prefixIcon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress),
-          const SizedBox(height: AppSpacing.sm),
-          PfTextField(
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            PfTextField(
               controller: _adresseCtrl,
               label: 'Adresse',
-              prefixIcon: Icons.location_on_outlined),
-          const SizedBox(height: AppSpacing.lg),
-          PfButton(
-            label: 'Enregistrer le fournisseur',
-            isLoading: _loading,
-            onPressed: _save,
-            fullWidth: true,
-          ),
-        ],
+              prefixIcon: Icons.location_on_outlined,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            PfButton(
+              label: 'Enregistrer le fournisseur',
+              isLoading: _loading,
+              onPressed: _save,
+              fullWidth: true,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Future<void> _save() async {
-    if (_nomCtrl.text.isEmpty) {
+    if (_loading) return;
+    if (_nomCtrl.text.trim().isEmpty) {
       PfSnackbar.error(context, 'Le nom est requis');
       return;
     }
@@ -260,17 +358,18 @@ class _AddFournisseurSheetState extends ConsumerState<_AddFournisseurSheet> {
     setState(() => _loading = true);
     try {
       final f = FournisseurModel(
-        id: const Uuid().v4(),
+        id: widget.fournisseur?.id ?? const Uuid().v4(),
         pharmacieId: pharmacie.id,
         nom: _nomCtrl.text.trim(),
         telephone: _telCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         adresse: _adresseCtrl.text.trim(),
-        createdAt: DateTime.now(),
+        createdAt: widget.fournisseur?.createdAt ?? DateTime.now(),
+        revision: widget.fournisseur?.revision ?? 0,
+        notes: widget.fournisseur?.notes,
       );
 
       await ref.read(fournisseurRepositoryProvider).saveFournisseur(f);
-      widget.onAdded();
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) PfSnackbar.error(context, 'Erreur : $e');

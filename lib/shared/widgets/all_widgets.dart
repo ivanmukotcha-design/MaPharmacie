@@ -29,29 +29,36 @@ class PfButton extends StatelessWidget {
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: color ?? AppColors.primary,
-        minimumSize: fullWidth ? const Size(double.infinity, 50) : const Size(
-            120, 50),
+        minimumSize: fullWidth
+            ? const Size(double.infinity, 50)
+            : const Size(120, 50),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: isLoading
           ? const SizedBox(
-        width: 20, height: 20,
-        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-      )
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
           : Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 18, color: Colors.white),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            label,
-            style: AppTextStyles.label.copyWith(
-                color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 18, color: Colors.white),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  label,
+                  style: AppTextStyles.label.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
     );
     return fullWidth ? SizedBox(width: double.infinity, child: btn) : btn;
   }
@@ -94,8 +101,9 @@ class PfTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: prefixIcon != null ? Icon(
-            prefixIcon, size: 20, color: AppColors.textMuted) : null,
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, size: 20, color: AppColors.textMuted)
+            : null,
         suffixIcon: suffixIcon,
       ),
     );
@@ -106,8 +114,14 @@ class PfTextField extends StatelessWidget {
 class PfSearchBar extends StatefulWidget {
   final String hint;
   final ValueChanged<String> onChanged;
+  final String? value;
 
-  const PfSearchBar({super.key, required this.hint, required this.onChanged});
+  const PfSearchBar({
+    super.key,
+    required this.hint,
+    required this.onChanged,
+    this.value,
+  });
 
   @override
   State<PfSearchBar> createState() => _PfSearchBarState();
@@ -115,6 +129,24 @@ class PfSearchBar extends StatefulWidget {
 
 class _PfSearchBarState extends State<PfSearchBar> {
   final _ctrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.text = widget.value ?? '';
+  }
+
+  @override
+  void didUpdateWidget(covariant PfSearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final value = widget.value;
+    if (value != null && value != _ctrl.text) {
+      _ctrl.value = TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: value.length),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -126,34 +158,50 @@ class _PfSearchBarState extends State<PfSearchBar> {
   Widget build(BuildContext context) {
     return TextField(
       controller: _ctrl,
-      onChanged: widget.onChanged,
+      onChanged: (value) {
+        setState(() {});
+        widget.onChanged(value);
+      },
       style: AppTextStyles.body,
       decoration: InputDecoration(
         hintText: widget.hint,
         prefixIcon: const Icon(
-            Icons.search, color: AppColors.textMuted, size: 20),
+          Icons.search,
+          color: AppColors.textMuted,
+          size: 20,
+        ),
         suffixIcon: _ctrl.text.isNotEmpty
             ? IconButton(
-          icon: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
-          onPressed: () {
-            _ctrl.clear();
-            widget.onChanged('');
-            setState(() {});
-          },
-        )
+                icon: const Icon(
+                  Icons.close,
+                  size: 18,
+                  color: AppColors.textMuted,
+                ),
+                onPressed: () {
+                  _ctrl.clear();
+                  widget.onChanged('');
+                  setState(() {});
+                },
+              )
             : null,
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        ),
         contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
     );
   }
@@ -177,17 +225,27 @@ class PfSnackbar {
     _show(context, message, AppColors.warning, Icons.warning_amber_outlined);
   }
 
-  static void _show(BuildContext context, String message, Color color,
-      IconData icon) {
+  static void _show(
+    BuildContext context,
+    String message,
+    Color color,
+    IconData icon,
+  ) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(width: 10),
-          Expanded(child: Text(message,
-              style: AppTextStyles.small.copyWith(color: Colors.white))),
-        ]),
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTextStyles.small.copyWith(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -216,7 +274,9 @@ class PfBadge extends StatelessWidget {
       child: Text(
         label,
         style: AppTextStyles.caption.copyWith(
-            color: color, fontWeight: FontWeight.w600),
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -229,14 +289,16 @@ class MainScaffold extends StatelessWidget {
   const MainScaffold({super.key, required this.child});
 
   static const _tabs = [
-    '/dashboard', '/stock', '/ventes', '/rapports', '/parametres',
+    '/dashboard',
+    '/stock',
+    '/ventes',
+    '/rapports',
+    '/parametres',
   ];
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState
-        .of(context)
-        .matchedLocation;
+    final location = GoRouterState.of(context).matchedLocation;
     int currentIndex = _tabs.indexWhere((t) => location.startsWith(t));
     if (currentIndex < 0) currentIndex = 0;
 
@@ -251,18 +313,45 @@ class MainScaffold extends StatelessWidget {
           child: Row(
             children: [
               _navItem(
-                  context, 0, Icons.dashboard_outlined, Icons.dashboard_rounded,
-                  'Accueil', currentIndex),
-              _navItem(context, 1, Icons.medication_outlined,
-                  Icons.medication_rounded, 'Stock', currentIndex),
-              _navItem(context, 2, Icons.shopping_cart_outlined,
-                  Icons.shopping_cart_rounded, 'Ventes', currentIndex),
+                context,
+                0,
+                Icons.dashboard_outlined,
+                Icons.dashboard_rounded,
+                'Accueil',
+                currentIndex,
+              ),
               _navItem(
-                  context, 3, Icons.bar_chart_outlined, Icons.bar_chart_rounded,
-                  'Rapports', currentIndex),
+                context,
+                1,
+                Icons.medication_outlined,
+                Icons.medication_rounded,
+                'Stock',
+                currentIndex,
+              ),
               _navItem(
-                  context, 4, Icons.settings_outlined, Icons.settings_rounded,
-                  'Paramètres', currentIndex),
+                context,
+                2,
+                Icons.shopping_cart_outlined,
+                Icons.shopping_cart_rounded,
+                'Ventes',
+                currentIndex,
+              ),
+              _navItem(
+                context,
+                3,
+                Icons.bar_chart_outlined,
+                Icons.bar_chart_rounded,
+                'Rapports',
+                currentIndex,
+              ),
+              _navItem(
+                context,
+                4,
+                Icons.settings_outlined,
+                Icons.settings_rounded,
+                'Paramètres',
+                currentIndex,
+              ),
             ],
           ),
         ),
@@ -270,8 +359,14 @@ class MainScaffold extends StatelessWidget {
     );
   }
 
-  Widget _navItem(BuildContext context, int index, IconData icon,
-      IconData activeIcon, String label, int currentIndex) {
+  Widget _navItem(
+    BuildContext context,
+    int index,
+    IconData icon,
+    IconData activeIcon,
+    String label,
+    int currentIndex,
+  ) {
     final selected = index == currentIndex;
     return Expanded(
       child: GestureDetector(
@@ -286,10 +381,13 @@ class MainScaffold extends StatelessWidget {
               AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 4),
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primary.withOpacity(0.1) : Colors
-                      .transparent,
+                  color: selected
+                      ? AppColors.primary.withOpacity(0.1)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Icon(
@@ -316,4 +414,3 @@ class MainScaffold extends StatelessWidget {
 }
 
 // Import needed for MainScaffold
-
