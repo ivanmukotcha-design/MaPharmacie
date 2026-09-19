@@ -1,10 +1,81 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pharmaflow/config/auth_provider.dart';
+import 'package:pharmaflow/core/errors/stock_insuffisant_error.dart';
+import 'package:pharmaflow/models/models.dart';
 import 'package:pharmaflow/features/sales/presentation/panier.dart';
 import 'fixtures.dart';
 
 void main() {
+  test('Le dépassement précise les quantités sans modifier le panier', () {
+    final cart = PanierNotifier();
+    addTearDown(cart.dispose);
+    cart.ajouterMedicament(medicament(unites: const UnitesStock(boites: 1)));
+    expect(
+      () => cart.incrementer(0),
+      throwsA(
+        isA<StockInsuffisantError>()
+            .having((error) => error.produit, 'produit', 'Produit med-1')
+            .having((error) => error.quantiteDemandee, 'demandée', 2)
+            .having((error) => error.quantiteDisponible, 'disponible', 1)
+            .having(
+              (error) => error.message,
+              'message',
+              contains('Stock disponible : 1 boîte'),
+            ),
+      ),
+    );
+    expect(cart.items.single.quantite, 1);
+    expect(cart.total, 100);
+    expect(
+      () => cart.changerUnite(0, 'carton'),
+      throwsA(
+        isA<StockInsuffisantError>()
+            .having((error) => error.unite, 'unité', 'carton')
+            .having((error) => error.quantiteDisponible, 'disponible', 0),
+      ),
+    );
+    expect(cart.items.single.unite, 'boite');
+  });
+
+  test('Le message compte aussi les boîtes dans les cartons', () {
+    final cart = PanierNotifier();
+    addTearDown(cart.dispose);
+    cart.ajouterMedicament(
+      medicament(unites: const UnitesStock(cartons: 1, boites: 2)),
+    );
+    for (var quantite = 1; quantite < 22; quantite++) {
+      cart.incrementer(0);
+    }
+    expect(
+      () => cart.incrementer(0),
+      throwsA(
+        isA<StockInsuffisantError>()
+            .having((error) => error.quantiteDisponible, 'disponible', 22)
+            .having(
+              (error) => error.message,
+              'message',
+              contains('Quantité demandée : 23 boîtes'),
+            ),
+      ),
+    );
+    expect(cart.items.single.quantite, 22);
+  });
+
+  test('Un premier ajout sans stock donne aussi une erreur explicite', () {
+    final cart = PanierNotifier();
+    addTearDown(cart.dispose);
+    expect(
+      () => cart.ajouterMedicament(medicament(unites: const UnitesStock())),
+      throwsA(
+        isA<StockInsuffisantError>()
+            .having((error) => error.quantiteDemandee, 'demandée', 1)
+            .having((error) => error.quantiteDisponible, 'disponible', 0),
+      ),
+    );
+    expect(cart.items, isEmpty);
+  });
+
   test(
     'Un changement distant du réglage conserve le panier au tarif détail',
     () {

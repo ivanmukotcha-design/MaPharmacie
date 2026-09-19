@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../config/auth_provider.dart';
+import '../../../core/errors/stock_insuffisant_error.dart';
 import '../../../models/models.dart';
 
 class PanierItem {
@@ -50,8 +51,7 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
     if (index >= 0) {
       incrementer(index);
     } else {
-      if (med.unites.disponible(med.unitePrix) < 1)
-        throw StateError('Stock insuffisant.');
+      _verifierStock(med, med.unitePrix, 1);
       state = [
         ...state,
         PanierItem(medicament: med, unite: med.unitePrix, prixApplique: prix),
@@ -62,10 +62,12 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
   void incrementer(int index) {
     if (_busy) return;
     final item = state[index];
-    if (item.medicament.estExpire ||
-        item.quantite >= item.medicament.unites.disponible(item.unite)) {
-      throw StateError('Stock insuffisant ou produit expiré.');
+    if (item.medicament.estExpire) {
+      throw StateError(
+        '${item.medicament.nom} est expiré et ne peut pas être vendu.',
+      );
     }
+    _verifierStock(item.medicament, item.unite, item.quantite + 1);
     state = [
       for (var position = 0; position < state.length; position++)
         position == index
@@ -107,8 +109,7 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
   void changerUnite(int index, String unite) {
     if (_busy) return;
     final item = state[index];
-    if (item.medicament.unites.disponible(unite) < 1)
-      throw StateError('Stock insuffisant dans cette unité.');
+    _verifierStock(item.medicament, unite, 1);
     final updated = item.copyWith(
       quantite: 1,
       unite: unite,
@@ -118,6 +119,18 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
       for (var position = 0; position < state.length; position++)
         position == index ? updated : state[position],
     ];
+  }
+
+  void _verifierStock(MedicamentModel medicament, String unite, int quantite) {
+    final disponible = medicament.unites.disponible(unite);
+    if (quantite > disponible) {
+      throw StockInsuffisantError(
+        produit: medicament.nom,
+        quantiteDemandee: quantite,
+        quantiteDisponible: disponible,
+        unite: unite,
+      );
+    }
   }
 
   void supprimerItem(int index) {

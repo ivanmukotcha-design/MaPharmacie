@@ -50,11 +50,14 @@ class PfButton extends StatelessWidget {
                   Icon(icon, size: 18, color: Colors.white),
                   const SizedBox(width: 8),
                 ],
-                Text(
-                  label,
-                  style: AppTextStyles.label.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.label.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -302,57 +305,79 @@ class MainScaffold extends StatelessWidget {
     int currentIndex = _tabs.indexWhere((t) => location.startsWith(t));
     if (currentIndex < 0) currentIndex = 0;
 
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              _navItem(
-                context,
-                0,
-                Icons.dashboard_outlined,
-                Icons.dashboard_rounded,
-                'Accueil',
-                currentIndex,
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        final router = GoRouter.of(context);
+        if (router.canPop() || location == '/dashboard') return false;
+        router.go('/dashboard');
+        return true;
+      },
+      child: PopScope<Object?>(
+        canPop: location == '/dashboard',
+        child: NotificationListener<NavigationNotification>(
+          onNotification: (notification) {
+            if (notification.canHandlePop || location == '/dashboard') {
+              return false;
+            }
+            const NavigationNotification(canHandlePop: true).dispatch(context);
+            return true;
+          },
+          child: Scaffold(
+            body: child,
+            bottomNavigationBar: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  top: BorderSide(color: AppColors.border, width: 1),
+                ),
               ),
-              _navItem(
-                context,
-                1,
-                Icons.medication_outlined,
-                Icons.medication_rounded,
-                'Stock',
-                currentIndex,
+              child: SafeArea(
+                child: Row(
+                  children: [
+                    _navItem(
+                      context,
+                      0,
+                      Icons.dashboard_outlined,
+                      Icons.dashboard_rounded,
+                      'Accueil',
+                      currentIndex,
+                    ),
+                    _navItem(
+                      context,
+                      1,
+                      Icons.medication_outlined,
+                      Icons.medication_rounded,
+                      'Stock',
+                      currentIndex,
+                    ),
+                    _navItem(
+                      context,
+                      2,
+                      Icons.shopping_cart_outlined,
+                      Icons.shopping_cart_rounded,
+                      'Ventes',
+                      currentIndex,
+                    ),
+                    _navItem(
+                      context,
+                      3,
+                      Icons.bar_chart_outlined,
+                      Icons.bar_chart_rounded,
+                      'Rapports',
+                      currentIndex,
+                    ),
+                    _navItem(
+                      context,
+                      4,
+                      Icons.settings_outlined,
+                      Icons.settings_rounded,
+                      'Paramètres',
+                      currentIndex,
+                    ),
+                  ],
+                ),
               ),
-              _navItem(
-                context,
-                2,
-                Icons.shopping_cart_outlined,
-                Icons.shopping_cart_rounded,
-                'Ventes',
-                currentIndex,
-              ),
-              _navItem(
-                context,
-                3,
-                Icons.bar_chart_outlined,
-                Icons.bar_chart_rounded,
-                'Rapports',
-                currentIndex,
-              ),
-              _navItem(
-                context,
-                4,
-                Icons.settings_outlined,
-                Icons.settings_rounded,
-                'Paramètres',
-                currentIndex,
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:pharmaflow/local_database/local_database.dart';
 import 'package:pharmaflow/models/models.dart';
+import 'package:pharmaflow/core/errors/stock_insuffisant_error.dart';
 import 'package:pharmaflow/repositories/medicament_repository.dart';
 import 'package:pharmaflow/repositories/vente_repository.dart';
 import 'package:pharmaflow/repositories/repository_access.dart';
@@ -33,6 +34,33 @@ void main() {
     );
   });
   tearDown(() => db.close());
+
+  test(
+    'La finalisation indique le stock réel sans enregistrer la vente refusée',
+    () async {
+      await medicines.saveMedicament(
+        medicament(unites: const UnitesStock(boites: 2)),
+      );
+      await expectLater(
+        sales.effectuerVente(vente(items: [venteItem(quantite: 3)])),
+        throwsA(
+          isA<StockInsuffisantError>()
+              .having((error) => error.quantiteDemandee, 'demandée', 3)
+              .having((error) => error.quantiteDisponible, 'disponible', 2),
+        ),
+      );
+      expect(await db.query('ventes'), isEmpty);
+      expect(await db.query('vente_items'), isEmpty);
+      expect(await db.query('sync_queue'), hasLength(1));
+      expect(
+        (await medicines.getMedicamentById(
+          'pharma-1',
+          'med-1',
+        ))!.unites.totalBoites,
+        2,
+      );
+    },
+  );
 
   test(
     'Le gros désactivé refuse une nouvelle vente mais permet un rejeu identique',

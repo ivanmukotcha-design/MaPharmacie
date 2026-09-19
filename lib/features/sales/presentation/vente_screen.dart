@@ -5,20 +5,50 @@ import 'package:uuid/uuid.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../config/auth_provider.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/errors/stock_insuffisant_error.dart';
 import '../../../models/models.dart';
 import '../../../repositories/vente_repository.dart';
-import '../../../local_database/local_database.dart';
 import '../../../shared/widgets/pf_button.dart';
-import '../../../shared/widgets/pf_search_bar.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
+import 'catalogue_vente.dart';
 import 'panier.dart';
 
 void _panierAction(BuildContext context, VoidCallback action) {
   try {
     action();
   } catch (error) {
-    PfSnackbar.error(context, error.toString());
+    _afficherErreurVente(context, error);
   }
+}
+
+void _afficherErreurVente(
+  BuildContext context,
+  Object error, {
+  String fallback = 'Impossible de modifier le panier. Veuillez réessayer.',
+}) {
+  if (error is StockInsuffisantError) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.inventory_2_outlined, color: AppColors.warning),
+        title: const Text('Stock insuffisant'),
+        content: SingleChildScrollView(child: Text(error.message)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Compris'),
+          ),
+        ],
+      ),
+    );
+    return;
+  }
+  final message = switch (error) {
+    StateError() => error.message,
+    FormatException() => error.message,
+    _ => fallback,
+  };
+  PfSnackbar.error(context, message);
 }
 
 class VenteScreen extends ConsumerWidget {
@@ -30,43 +60,85 @@ class VenteScreen extends ConsumerWidget {
     final notifier = ref.read(panierProvider.notifier);
     final typeVente = ref.watch(typeVenteProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        title: const Text('Nouvelle vente'),
-        actions: [
-          if (panier.isNotEmpty)
-            IconButton(
-              icon: const Icon(
-                Icons.delete_sweep_outlined,
-                color: AppColors.danger,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(
+          title: const Text('Nouvelle vente'),
+          bottom: TabBar(
+            onTap: (_) => FocusScope.of(context).unfocus(),
+            tabs: [
+              const Tab(text: 'Catalogue'),
+              Tab(text: 'Panier (${panier.length})'),
+            ],
+          ),
+          actions: [
+            if (panier.isNotEmpty)
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_sweep_outlined,
+                  color: AppColors.danger,
+                ),
+                onPressed: () => notifier.vider(),
               ),
-              onPressed: () => notifier.vider(),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (ref.watch(wholesaleEnabledProvider)) const _TypeVenteToggle(),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: CatalogueVente(
+                          onAjouter: (medicament) => _panierAction(
+                            context,
+                            () => notifier.ajouterMedicament(medicament),
+                          ),
+                        ),
+                      ),
+                      if (panier.isNotEmpty &&
+                          MediaQuery.viewInsetsOf(context).bottom == 0)
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: Builder(
+                            builder: (context) => PfButton(
+                              label:
+                                  'Voir le panier (${panier.length}) · ${notifier.total.toStringAsFixed(0)} FC',
+                              fullWidth: true,
+                              onPressed: () {
+                                FocusScope.of(context).unfocus();
+                                DefaultTabController.of(context).animateTo(1);
+                              },
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      if (panier.isNotEmpty)
+                        _PanierHeader(
+                          count: panier.length,
+                          total: notifier.total,
+                        ),
+                      Expanded(
+                        child: panier.isEmpty
+                            ? const _EmptyPanier()
+                            : _PanierList(panier: panier, notifier: notifier),
+                      ),
+                      if (panier.isNotEmpty)
+                        _BoutonFinaliser(typeVente: typeVente),
+                    ],
+                  ),
+                ],
+              ),
             ),
-        ],
-      ),
-      body: Column(
-        children: [
-          if (ref.watch(wholesaleEnabledProvider)) const _TypeVenteToggle(),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: PfSearchBar(
-              value: ref.watch(searchVenteProvider),
-              hint: 'Rechercher un médicament...',
-              onChanged: (v) =>
-                  ref.read(searchVenteProvider.notifier).state = v,
-            ),
-          ),
-          const _SearchResults(),
-          if (panier.isNotEmpty)
-            _PanierHeader(count: panier.length, total: notifier.total),
-          Expanded(
-            child: panier.isEmpty
-                ? const _EmptyPanier()
-                : _PanierList(panier: panier, notifier: notifier),
-          ),
-          if (panier.isNotEmpty) _BoutonFinaliser(typeVente: typeVente),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -138,96 +210,6 @@ class _TypeVenteToggle extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-class _SearchResults extends ConsumerWidget {
-  const _SearchResults();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final query = ref.watch(searchVenteProvider);
-    ref.watch(localChangesProvider);
-    final typeVente = ref.watch(typeVenteProvider);
-    if (query.isEmpty) return const SizedBox.shrink();
-
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _searchMedicaments(ref, query),
-      builder: (context, snapshot) {
-        if (snapshot.hasError)
-          return Text('Recherche impossible : ${snapshot.error}');
-        if (!snapshot.hasData || snapshot.data!.isEmpty)
-          return const SizedBox.shrink();
-        final results = snapshot.data!;
-
-        return Container(
-          constraints: const BoxConstraints(maxHeight: 250),
-          margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: AppBorderRadius.md,
-            border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ListView.builder(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            itemCount: results.length,
-            itemBuilder: (context, index) {
-              final mData = results[index];
-              final prix = typeVente == TypeVente.gros
-                  ? (mData['prix_grossiste'] as num?)?.toDouble()
-                  : (mData['prix_detail'] as num).toDouble();
-
-              return ListTile(
-                title: Text(mData['nom'], style: AppTextStyles.label),
-                subtitle: Text(
-                  prix == null
-                      ? 'Tarif de gros non renseigné'
-                      : '${prix.toStringAsFixed(0)} FC',
-                  style: AppTextStyles.small.copyWith(color: AppColors.primary),
-                ),
-                trailing: const Icon(
-                  Icons.add_circle_outline,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: 0,
-                ),
-                onTap: prix == null
-                    ? null
-                    : () {
-                        _panierAction(context, () {
-                          final med = MedicamentModel.fromSql(mData);
-                          ref
-                              .read(panierProvider.notifier)
-                              .ajouterMedicament(med);
-                          ref.read(searchVenteProvider.notifier).state = '';
-                        });
-                      },
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> _searchMedicaments(
-    WidgetRef ref,
-    String query,
-  ) async {
-    final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
-    if (pharmacie == null) return [];
-    return LocalDatabase.searchMedicaments(pharmacie.id, query);
   }
 }
 
@@ -366,6 +348,11 @@ class _EmptyPanier extends StatelessWidget {
             'Votre panier est vide',
             style: AppTextStyles.body.copyWith(color: AppColors.textMuted),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          TextButton(
+            onPressed: () => DefaultTabController.of(context).animateTo(0),
+            child: const Text('Choisir des produits'),
+          ),
         ],
       ),
     );
@@ -457,8 +444,14 @@ class _BoutonFinaliserState extends ConsumerState<_BoutonFinaliser> {
           'Vente enregistrée sur cet appareil. Consultez l’état de synchronisation sur l’accueil.',
         );
       }
-    } catch (e) {
-      if (mounted) PfSnackbar.error(context, 'Erreur lors de la vente: $e');
+    } catch (error) {
+      if (mounted) {
+        _afficherErreurVente(
+          context,
+          error,
+          fallback: "La vente n'a pas pu être enregistrée. Veuillez réessayer.",
+        );
+      }
     } finally {
       notifier.verrouiller(false);
       if (busy.mounted) busy.state = false;

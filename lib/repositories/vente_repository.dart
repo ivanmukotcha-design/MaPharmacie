@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import '../local_database/local_database.dart';
 import '../config/auth_provider.dart';
 import '../models/models.dart';
+import '../core/errors/stock_insuffisant_error.dart';
 import '../services/sync_service.dart';
 import 'repository_access.dart';
 
@@ -108,6 +109,15 @@ class VenteRepository {
             !_same(item.sousTotal, price * item.quantite)) {
           throw StateError(
             'Le prix de ${med.nom} a changé. Recréez le panier.',
+          );
+        }
+        final disponible = med.unites.disponible(item.unite);
+        if (item.quantite > disponible) {
+          throw StockInsuffisantError(
+            produit: med.nom,
+            quantiteDemandee: item.quantite,
+            quantiteDisponible: disponible,
+            unite: item.unite,
           );
         }
         final updated = med.copyWith(
