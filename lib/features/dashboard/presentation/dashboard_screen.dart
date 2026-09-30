@@ -35,9 +35,10 @@ final dashboardStatsProvider = FutureProvider.autoDispose<DashboardStats?>((
       stockFaible++;
     }
 
-    if (m.estExpire) {
+    if (m.contientExpires) {
       expires++;
-    } else if (m.expireBientot) {
+    }
+    if (m.expireBientot) {
       expireBientot++;
     }
   }

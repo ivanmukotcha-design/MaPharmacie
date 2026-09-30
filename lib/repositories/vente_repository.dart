@@ -8,6 +8,8 @@ import '../models/models.dart';
 import '../core/errors/stock_insuffisant_error.dart';
 import '../services/sync_service.dart';
 import 'repository_access.dart';
+import 'sync_write_guard.dart';
+import 'stock_movement.dart';
 
 final venteRepositoryProvider = Provider<VenteRepository>((ref) {
   final sync = ref.watch(syncServiceProvider);
@@ -80,7 +82,13 @@ class VenteRepository {
       if (vente.typeVente == 'gros' && !_wholesaleAllowed()) {
         throw StateError('Les tarifs de gros sont désactivés.');
       }
+      await ensureNoSyncIssue(
+        transaction,
+        vente.pharmacieId,
+        vente.items.map((item) => 'medicaments/${item.medicamentId}').toSet(),
+      );
       final stockUpdates = <Map<String, dynamic>>[];
+      final activities = <Map<String, dynamic>>[];
       final seen = <String>{};
       var total = 0.0;
       var profit = 0.0;
@@ -103,15 +111,10 @@ class VenteRepository {
           item.unite,
           gros: vente.typeVente == 'gros',
         );
-        final cost = med.coutPourUnite(item.unite);
-        if (!_same(item.prixUnitaire, price) ||
-            !_same(item.prixAchat, cost) ||
-            !_same(item.sousTotal, price * item.quantite)) {
-          throw StateError(
-            'Le prix de ${med.nom} a changé. Recréez le panier.',
-          );
+        if (item.quantite <= 0) {
+          throw const FormatException('Quantité invalide.');
         }
-        final disponible = med.unites.disponible(item.unite);
+        final disponible = med.unitesVendables.disponible(item.unite);
         if (item.quantite > disponible) {
           throw StockInsuffisantError(
             produit: med.nom,
@@ -120,10 +123,22 @@ class VenteRepository {
             unite: item.unite,
           );
         }
-        final updated = med.copyWith(
-          unites: med.unites.deduire(item.quantite, item.unite),
-          revision: med.revision + 1,
-        );
+        final allocations = med.lotsPourVente(item.quantite, item.unite);
+        if (jsonEncode(allocations.map((entry) => entry.toMap()).toList()) !=
+            jsonEncode(item.lots.map((entry) => entry.toMap()).toList())) {
+          throw StateError(
+            'Les lots de ${med.nom} ont changé. Recréez le panier.',
+          );
+        }
+        final cost = med.coutVente(item.quantite, item.unite) / item.quantite;
+        if (!_same(item.prixUnitaire, price) ||
+            !_same(item.prixAchat, cost) ||
+            !_same(item.sousTotal, price * item.quantite)) {
+          throw StateError(
+            'Le prix de ${med.nom} a changé. Recréez le panier.',
+          );
+        }
+        final updated = med.deduireArticle(item, DateTime.now());
         total += item.sousTotal;
         profit += item.beneficeItem;
         await transaction.update(
@@ -137,6 +152,16 @@ class VenteRepository {
           'document': updated.toMap(),
           'expected_revision': med.revision,
         });
+        final movement = stockMovement(
+          updated,
+          before: med.stockTotal,
+          kind: 'vente',
+          reason: 'Vente',
+          saleId: vente.id,
+          allocations: item.lots,
+        );
+        await transaction.insert('activites', movement.toSql());
+        activities.add(movementPayload(movement));
       }
       if (!_same(vente.totalHT, total) ||
           !_same(vente.totalTTC, total) ||
@@ -146,7 +171,7 @@ class VenteRepository {
       await transaction.insert('ventes', vente.toSql());
       for (var index = 0; index < vente.items.length; index++) {
         await transaction.insert('vente_items', {
-          ...vente.items[index].toMap(),
+          ...vente.items[index].toSql(),
           'id': '${vente.id}_$index',
           'vente_id': vente.id,
         });
@@ -156,7 +181,11 @@ class VenteRepository {
         collection: 'pharmacies/${vente.pharmacieId}/ventes',
         docId: vente.id,
         operation: 'sale',
-        data: {'document': vente.toMap(), 'stock_updates': stockUpdates},
+        data: {
+          'document': vente.toMap(),
+          'stock_updates': stockUpdates,
+          'activities': activities,
+        },
       );
     });
     LocalDatabase.notifyChanged();

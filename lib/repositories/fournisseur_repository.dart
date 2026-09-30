@@ -4,6 +4,7 @@ import '../local_database/local_database.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
 import 'repository_access.dart';
+import 'sync_write_guard.dart';
 import '../config/auth_provider.dart';
 
 final fournisseursProvider = FutureProvider.autoDispose<List<FournisseurModel>>(
@@ -44,6 +45,9 @@ class FournisseurRepository {
     final db = await _database();
     await db.transaction((transaction) async {
       _access.write(fournisseur.pharmacieId);
+      await ensureNoSyncIssue(transaction, fournisseur.pharmacieId, {
+        'fournisseurs/${fournisseur.id}',
+      });
       final rows = await transaction.query(
         'fournisseurs',
         where: 'id = ? AND pharmacie_id = ?',

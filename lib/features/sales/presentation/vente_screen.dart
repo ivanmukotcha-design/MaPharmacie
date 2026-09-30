@@ -416,7 +416,8 @@ class _BoutonFinaliserState extends ConsumerState<_BoutonFinaliser> {
               quantite: item.quantite,
               unite: item.unite,
               prixUnitaire: item.prixApplique,
-              prixAchat: item.medicament.coutPourUnite(item.unite),
+              prixAchat: item.coutUnitaire,
+              lots: item.lots,
               sousTotal: item.sousTotal,
             ),
           )

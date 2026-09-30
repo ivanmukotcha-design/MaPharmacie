@@ -7,6 +7,7 @@ import '../../../local_database/local_database.dart';
 import '../../../shared/widgets/pf_search_bar.dart';
 import '../../../shared/widgets/pf_badge.dart';
 import '../../../shared/widgets/barcode_scanner_screen.dart';
+import '../../../models/models.dart';
 
 // Filtres stock
 enum FiltreStock { tous, faible, rupture, expires, expireBientot }
@@ -164,44 +165,20 @@ class StockScreen extends ConsumerWidget {
     List<Map<String, dynamic>> meds,
     FiltreStock filtre,
   ) {
-    final now = DateTime.now();
-    final dans30j = now.add(const Duration(days: 30));
-
     return meds.where((m) {
-      final totalBase =
-          (m['cartons'] as int) *
-              (m['cartons_par_boite'] as int) *
-              (m['boites_par_plaquette'] as int) *
-              (m['plaquettes_par_comprime'] as int) +
-          (m['boites'] as int) *
-              (m['boites_par_plaquette'] as int) *
-              (m['plaquettes_par_comprime'] as int) +
-          (m['plaquettes'] as int) * (m['plaquettes_par_comprime'] as int) +
-          (m['comprimes'] as int) +
-          (m['flacons'] as int);
-      final totalBoites = m['unite_prix'] == 'flacon'
-          ? m['flacons'] as int
-          : (m['cartons'] as int) * (m['cartons_par_boite'] as int) +
-                (m['boites'] as int);
-      final seuil = m['seuil_alerte'] as int;
-      final dateExpStr = m['date_expiration'] as String?;
-      DateTime? dateExp = dateExpStr != null
-          ? DateTime.tryParse(dateExpStr)
-          : null;
+      final medicine = MedicamentModel.fromSql(m);
 
       switch (filtre) {
         case FiltreStock.tous:
           return true;
         case FiltreStock.faible:
-          return totalBase > 0 && totalBoites <= seuil;
+          return medicine.estStockFaible;
         case FiltreStock.rupture:
-          return totalBase == 0;
+          return medicine.estEnRupture;
         case FiltreStock.expires:
-          return dateExp != null && dateExp.isBefore(now);
+          return medicine.contientExpires;
         case FiltreStock.expireBientot:
-          return dateExp != null &&
-              dateExp.isAfter(now) &&
-              dateExp.isBefore(dans30j);
+          return medicine.expireBientot;
       }
     }).toList();
   }
@@ -288,32 +265,14 @@ class _MedicamentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final totalBase =
-        (med['cartons'] as int) *
-            (med['cartons_par_boite'] as int) *
-            (med['boites_par_plaquette'] as int) *
-            (med['plaquettes_par_comprime'] as int) +
-        (med['boites'] as int) *
-            (med['boites_par_plaquette'] as int) *
-            (med['plaquettes_par_comprime'] as int) +
-        (med['plaquettes'] as int) * (med['plaquettes_par_comprime'] as int) +
-        (med['comprimes'] as int) +
-        (med['flacons'] as int);
-    final totalBoites = med['unite_prix'] == 'flacon'
-        ? med['flacons'] as int
-        : (med['cartons'] as int) * (med['cartons_par_boite'] as int) +
-              (med['boites'] as int);
-    final seuil = med['seuil_alerte'] as int;
-    final dateExpStr = med['date_expiration'] as String?;
-    final dateExp = dateExpStr != null ? DateTime.tryParse(dateExpStr) : null;
+    final medicine = MedicamentModel.fromSql(med);
 
     Color indicateur;
     String statutLabel;
-    if (totalBase == 0) {
+    if (medicine.estEnRupture) {
       indicateur = AppColors.danger;
       statutLabel = 'Rupture';
-    } else if (totalBoites <= seuil) {
+    } else if (medicine.estStockFaible) {
       indicateur = AppColors.warning;
       statutLabel = 'Stock faible';
     } else {
@@ -321,9 +280,8 @@ class _MedicamentCard extends StatelessWidget {
       statutLabel = 'En stock';
     }
 
-    bool expire = dateExp != null && dateExp.isBefore(now);
-    bool expireBientot =
-        dateExp != null && !expire && dateExp.difference(now).inDays <= 30;
+    final expire = medicine.contientExpires;
+    final expireBientot = medicine.expireBientot;
 
     return GestureDetector(
       onTap: () => context.push('/medicament/${med['id']}'),
@@ -401,7 +359,9 @@ class _MedicamentCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
                     children: [
                       _stockChip(
                         med['unite_prix'] == 'flacon'
@@ -410,14 +370,19 @@ class _MedicamentCard extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       if (expire)
-                        _tagChip('Expiré', AppColors.danger)
-                      else if (expireBientot)
                         _tagChip(
-                          '${dateExp.difference(now).inDays}j',
-                          AppColors.warning,
-                        ),
+                          medicine.suiviLots ? 'Lot expiré' : 'Expiré',
+                          AppColors.danger,
+                        )
+                      else if (expireBientot)
+                        _tagChip('Péremption proche', AppColors.warning),
                     ],
                   ),
+                  if (medicine.suiviLots)
+                    Text(
+                      'Vendable : ${medicine.unitesVendables.affichage}',
+                      style: AppTextStyles.small,
+                    ),
                 ],
               ),
             ),

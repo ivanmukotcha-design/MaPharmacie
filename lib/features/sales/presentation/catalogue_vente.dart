@@ -158,7 +158,8 @@ class CatalogueVente extends ConsumerWidget {
                         indisponible = 'Rupture de stock';
                       } else if (prix == null) {
                         indisponible = 'Tarif de gros non renseigné';
-                      } else if (medicament.prixAchat == null) {
+                      } else if (medicament.prixAchat == null &&
+                          !medicament.suiviLots) {
                         indisponible = "Prix d'achat non renseigné";
                       } else {
                         indisponible = null;
@@ -187,7 +188,12 @@ class CatalogueVente extends ConsumerWidget {
                                     color: AppColors.primary,
                                   ),
                                 ),
-                              Text('Stock : ${medicament.unites.affichage}'),
+                              Text(
+                                'Stock : ${medicament.unitesVendables.affichage}',
+                              ),
+                              if (medicament.suiviLots &&
+                                  medicament.contientExpires)
+                                const Text('Lots expirés exclus'),
                               if (indisponible != null)
                                 Text(
                                   indisponible,

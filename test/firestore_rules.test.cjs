@@ -97,6 +97,20 @@ test('Inscription autonome, compte partagé et isolation Firestore', async (suit
     seuil_alerte: 5, unites: { cartons: 0, boites: 10, plaquettes: 0, comprimes: 0, flacons: 0,
       cartons_par_boite: 20, boites_par_plaquette: 10, plaquettes_par_comprime: 10 } };
   const medicinePath = `${path}/medicaments/med-1`;
+  await suite.test('Les anciens clients ne peuvent écraser le suivi par lots', async () => {
+    const lotsPath = `${path}/medicaments/tracked`;
+    const tracked = { ...medicine, suivi_lots: true, lot_revision: 1, lots: [{
+      id: 'lot-1', numero: 'LOT-1', quantite_base: 1000, cout_base: 0.5,
+      reception: new Date().toISOString(), expiration: '2030-01-01T00:00:00', fournisseur: '',
+    }] };
+    await allowed(write(lotsPath, tracked, pharmacy.token));
+    await denied(write(lotsPath, { ...tracked, revision: 2 }, pharmacy.token));
+    await denied(write(lotsPath, { ...tracked, revision: 2, suivi_lots: false }, pharmacy.token));
+    await denied(write(lotsPath, { ...tracked, revision: 2, lot_revision: 2, unite_prix: 'comprimes' }, pharmacy.token));
+    await denied(write(lotsPath, { ...tracked, revision: 2, lot_revision: 2, unites: { ...tracked.unites, cartons_par_boite: 10 } }, pharmacy.token));
+    await allowed(write(lotsPath, { ...tracked, revision: 2, lot_revision: 2 }, pharmacy.token));
+    await denied(read(lotsPath, stranger.token));
+  });
   await suite.test('Stock privé, prix de gros facultatif, révisions et quantités contrôlés', async () => {
     await denied(write(medicinePath, medicine, stranger.token));
     await allowed(write(medicinePath, medicine, pharmacy.token));

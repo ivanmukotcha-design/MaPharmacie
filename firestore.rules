@@ -26,6 +26,9 @@ service cloud.firestore {
       let data = request.resource.data;
       let units = data.unites;
       return data.nom is string && data.nom.size() > 0
+        && data.get('suivi_lots', false) is bool
+        && (!data.get('suivi_lots', false) ||
+          (data.lots is list && data.lots.size() <= 200 && data.lot_revision == data.revision))
         && data.est_actif is bool
         && data.prix_detail is number && data.prix_detail >= 0
         && (data.prix_grossiste == null || (data.prix_grossiste is number && data.prix_grossiste >= 0))
@@ -43,6 +46,16 @@ service cloud.firestore {
         && (data.unite_prix == 'flacon'
           ? units.cartons == 0 && units.boites == 0 && units.plaquettes == 0 && units.comprimes == 0
           : units.flacons == 0);
+    }
+    function preserveLots() {
+      let old = resource.data;
+      let data = request.resource.data;
+      return !old.get('suivi_lots', false) ||
+        (data.get('suivi_lots', false) && data.lot_revision == data.revision
+          && data.unite_prix == old.unite_prix
+          && data.unites.cartons_par_boite == old.unites.cartons_par_boite
+          && data.unites.boites_par_plaquette == old.unites.boites_par_plaquette
+          && data.unites.plaquettes_par_comprime == old.unites.plaquettes_par_comprime);
     }
     match /pharmacies/{pharmacieId} {
       allow get: if isOwner(pharmacieId);
@@ -67,7 +80,7 @@ service cloud.firestore {
         allow create: if (canWrite(pharmacieId))
           && validTenant(pharmacieId) && validMedicament() && validRevisionCreate();
         allow update: if (canWrite(pharmacieId))
-          && validTenant(pharmacieId) && validMedicament() && validRevisionUpdate();
+          && validTenant(pharmacieId) && validMedicament() && validRevisionUpdate() && preserveLots();
         allow delete: if false;
       }
       match /fournisseurs/{fournisseurId} {

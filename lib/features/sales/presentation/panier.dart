@@ -8,18 +8,25 @@ class PanierItem {
   final int quantite;
   final String unite;
   final double prixApplique;
-  const PanierItem({
+  final DateTime estimationDate;
+  PanierItem({
+    DateTime? estimationDate,
     required this.medicament,
     required this.unite,
     this.quantite = 1,
     required this.prixApplique,
-  });
+  }) : estimationDate = estimationDate ?? DateTime.now();
   double get sousTotal => prixApplique * quantite;
-  double get benefice =>
-      (prixApplique - medicament.coutPourUnite(unite)) * quantite;
+  List<LotAllocation> get lots =>
+      medicament.lotsPourVente(quantite, unite, date: estimationDate);
+  double get coutTotal =>
+      medicament.coutVente(quantite, unite, date: estimationDate);
+  double get coutUnitaire => coutTotal / quantite;
+  double get benefice => sousTotal - coutTotal;
   PanierItem copyWith({int? quantite, String? unite, double? prix}) =>
       PanierItem(
         medicament: medicament,
+        estimationDate: estimationDate,
         quantite: quantite ?? this.quantite,
         unite: unite ?? this.unite,
         prixApplique: prix ?? prixApplique,
@@ -46,12 +53,12 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
     final prix = med.prixPourUnite(med.unitePrix, gros: _gros);
     if (!med.estActif || med.estExpire)
       throw StateError('Ce produit ne peut pas être vendu.');
-    med.coutPourUnite(med.unitePrix);
     final index = state.indexWhere((entry) => entry.medicament.id == med.id);
     if (index >= 0) {
       incrementer(index);
     } else {
       _verifierStock(med, med.unitePrix, 1);
+      med.coutPourUnite(med.unitePrix);
       state = [
         ...state,
         PanierItem(medicament: med, unite: med.unitePrix, prixApplique: prix),
@@ -122,7 +129,7 @@ class PanierNotifier extends StateNotifier<List<PanierItem>> {
   }
 
   void _verifierStock(MedicamentModel medicament, String unite, int quantite) {
-    final disponible = medicament.unites.disponible(unite);
+    final disponible = medicament.unitesVendables.disponible(unite);
     if (quantite > disponible) {
       throw StockInsuffisantError(
         produit: medicament.nom,

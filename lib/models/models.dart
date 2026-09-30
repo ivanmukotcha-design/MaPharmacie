@@ -1,4 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
+import 'stock_lot.dart';
+export 'stock_lot.dart';
 
 class PharmacieModel {
   final String id;
@@ -79,6 +82,8 @@ class MedicamentModel {
   final String? codeBarres;
   final int seuilAlerte;
   final UnitesStock unites;
+  final List<StockLot>? lots;
+  bool get suiviLots => lots != null;
   final bool estActif;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -98,6 +103,7 @@ class MedicamentModel {
     required this.fournisseurNom,
     required this.seuilAlerte,
     required this.unites,
+    this.lots,
     required this.estActif,
     required this.createdAt,
     required this.updatedAt,
@@ -110,6 +116,20 @@ class MedicamentModel {
     final units = UnitesStock.fromMap(
       Map<String, dynamic>.from(map['unites'] as Map? ?? {}),
     );
+    final lots = map['suivi_lots'] == true
+        ? (map['lots'] as List)
+              .map(
+                (entry) =>
+                    StockLot.fromMap(Map<String, dynamic>.from(entry as Map)),
+              )
+              .toList()
+        : null;
+    final dates =
+        (lots ?? <StockLot>[])
+            .where((lot) => lot.quantiteBase > 0 && lot.expiration != null)
+            .map((lot) => lot.expiration!)
+            .toList()
+          ..sort();
     return MedicamentModel(
       id: id,
       pharmacieId: map['pharmacie_id'] ?? '',
@@ -126,10 +146,13 @@ class MedicamentModel {
       fournisseurId: map['fournisseur_id'] ?? '',
       fournisseurNom: map['fournisseur_nom'] ?? '',
       imageUrl: map['image_url'],
-      dateExpiration: (map['date_expiration'] as Timestamp?)?.toDate(),
+      dateExpiration: lots == null
+          ? (map['date_expiration'] as Timestamp?)?.toDate()
+          : (dates.isEmpty ? null : dates.first),
       codeBarres: map['code_barres'],
       seuilAlerte: map['seuil_alerte'] ?? 10,
       unites: UnitesStock.fromMap(map['unites'] ?? {}),
+      lots: lots == null ? null : List.unmodifiable(lots),
       estActif: map['est_actif'] ?? true,
       createdAt: (map['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (map['updated_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -155,6 +178,9 @@ class MedicamentModel {
     'code_barres': codeBarres,
     'seuil_alerte': seuilAlerte,
     'unites': unites.toMap(),
+    'suivi_lots': suiviLots,
+    'lots': lots?.map((lot) => lot.toMap()).toList() ?? [],
+    if (suiviLots) 'lot_revision': revision,
     'est_actif': estActif,
     'created_at': Timestamp.fromDate(createdAt),
     'updated_at': Timestamp.fromDate(updatedAt),
@@ -170,14 +196,25 @@ class MedicamentModel {
     }
     data['est_actif'] = row['est_actif'] == 1;
     data['unites'] = UnitesStock.fromMap(row).toMap();
+    data['suivi_lots'] = row['lots_json'] != null;
+    data['lots'] = row['lots_json'] == null
+        ? []
+        : jsonDecode(row['lots_json'] as String);
     return MedicamentModel.fromMap(data, row['id'] as String);
   }
 
   Map<String, dynamic> toSql({bool synced = false}) {
-    final data = toMap()..remove('unites');
+    final data = toMap()
+      ..remove('unites')
+      ..remove('lots')
+      ..remove('suivi_lots')
+      ..remove('lot_revision');
     return {
       ...data,
       ...unites.toMap(),
+      'lots_json': lots == null
+          ? null
+          : jsonEncode(lots!.map((lot) => lot.toMap()).toList()),
       'id': id,
       'date_expiration': dateExpiration?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
@@ -191,12 +228,15 @@ class MedicamentModel {
     UnitesStock? unites,
     bool? estActif,
     int? revision,
+    List<StockLot>? lots,
   }) {
     return MedicamentModel.fromMap({
       ...toMap(),
       'unites': (unites ?? this.unites).toMap(),
       'est_actif': estActif ?? this.estActif,
       'revision': revision ?? this.revision,
+      'suivi_lots': lots != null || suiviLots,
+      'lots': (lots ?? this.lots)?.map((lot) => lot.toMap()).toList() ?? [],
       'updated_at': Timestamp.now(),
     }, id);
   }
@@ -219,6 +259,19 @@ class MedicamentModel {
     if (seuilAlerte < 0)
       throw const FormatException('Seuil de stock invalide.');
     unites.validate();
+    if (lots != null) {
+      if (lots!.length > 200 ||
+          lots!.map((lot) => lot.id).toSet().length != lots!.length ||
+          lots!.fold(0, (total, lot) => total + lot.quantiteBase) !=
+              stockTotal) {
+        throw const FormatException(
+          'Les lots doivent correspondre au stock total (200 lots maximum).',
+        );
+      }
+      for (final lot in lots!) {
+        lot.validate();
+      }
+    }
     unites.facteur(unitePrix);
     if (unites.flacons > 0 && unitePrix != 'flacon') {
       throw const FormatException('Choisissez le flacon comme unité tarifée.');
@@ -238,10 +291,79 @@ class MedicamentModel {
   }
 
   double coutPourUnite(String unite) {
+    if (suiviLots) return coutVente(1, unite);
     if (prixAchat == null) {
       throw StateError('Renseignez le prix d’achat de $nom avant de vendre.');
     }
     return _convertirPrix(prixAchat!, unite);
+  }
+
+  List<LotAllocation> lotsPourVente(
+    int quantite,
+    String unite, {
+    DateTime? date,
+  }) => lots == null
+      ? []
+      : allocateLots(
+          lots!,
+          quantite * unites.facteur(unite),
+          date ?? DateTime.now(),
+        );
+
+  double coutVente(int quantite, String unite, {DateTime? date}) {
+    if ((unite == 'flacon') != (unitePrix == 'flacon')) {
+      throw const FormatException('Unité incompatible.');
+    }
+    if (lots == null) return coutPourUnite(unite) * quantite;
+    return lotsPourVente(
+      quantite,
+      unite,
+      date: date,
+    ).fold(0.0, (total, entry) => total + entry.coutTotal);
+  }
+
+  UnitesStock get unitesVendables => lots == null
+      ? unites
+      : unites.avecTotalBase(
+          lots!
+              .where((lot) => !lot.expiredAt(DateTime.now()))
+              .fold(0, (total, lot) => total + lot.quantiteBase),
+          flacon: unitePrix == 'flacon',
+        );
+
+  bool get contientExpires => lots == null
+      ? estExpire
+      : lots!.any(
+          (lot) => lot.quantiteBase > 0 && lot.expiredAt(DateTime.now()),
+        );
+
+  MedicamentModel deduireArticle(VenteItemModel article, DateTime date) {
+    if ((article.unite == 'flacon') != (unitePrix == 'flacon')) {
+      throw const FormatException('Unité incompatible.');
+    }
+    if (lots == null) {
+      if (article.lots.isNotEmpty) {
+        throw StateError('Le suivi des lots de ce produit est incohérent.');
+      }
+      return copyWith(
+        unites: unites.deduire(article.quantite, article.unite),
+        revision: revision + 1,
+      );
+    }
+    final updated = debitLots(
+      lots!,
+      article.lots,
+      article.quantite * unites.facteur(article.unite),
+      date,
+    );
+    return copyWith(
+      lots: updated,
+      unites: unites.avecTotalBase(
+        updated.fold(0, (total, lot) => total + lot.quantiteBase),
+        flacon: unitePrix == 'flacon',
+      ),
+      revision: revision + 1,
+    );
   }
 
   double _convertirPrix(double prix, String unite) {
@@ -256,18 +378,31 @@ class MedicamentModel {
   // Stock total en unité de base (comprimés/flacons)
   int get stockTotal => unites.totalUniteBase;
 
-  bool get estEnRupture => stockTotal == 0;
+  bool get estEnRupture => unitesVendables.totalUniteBase == 0;
   bool get estStockFaible =>
-      stockTotal > 0 &&
-      (unitePrix == 'flacon' ? unites.flacons : unites.totalBoites) <=
+      unitesVendables.totalUniteBase > 0 &&
+      (unitePrix == 'flacon'
+              ? unitesVendables.flacons
+              : unitesVendables.totalBoites) <=
           seuilAlerte;
 
   bool get estExpire {
+    if (suiviLots) return stockTotal > 0 && estEnRupture && contientExpires;
     if (dateExpiration == null) return false;
     return DateTime.now().isAfter(dateExpiration!);
   }
 
   bool get expireBientot {
+    if (suiviLots) {
+      return lots!.any(
+        (lot) =>
+            lot.quantiteBase > 0 &&
+            lot.expiration != null &&
+            !lot.expiredAt(DateTime.now()) &&
+            lot.expiration!.difference(DateTime.now()) <=
+                const Duration(days: 30),
+      );
+    }
     if (dateExpiration == null) return false;
     final diff = dateExpiration!.difference(DateTime.now());
     return !estExpire && diff <= const Duration(days: 30);
@@ -439,6 +574,20 @@ class UnitesStock {
     );
   }
 
+  UnitesStock avecTotalBase(int total, {required bool flacon}) {
+    if (total < 0) throw const FormatException('Stock négatif interdit.');
+    return flacon
+        ? UnitesStock.fromMap({
+            ...toMap(),
+            'cartons': 0,
+            'boites': 0,
+            'plaquettes': 0,
+            'comprimes': 0,
+            'flacons': total,
+          })
+        : _reconstruireDepuisBase(total);
+  }
+
   String get affichage {
     final parts = <String>[];
     if (cartons > 0) parts.add('$cartons carton${cartons > 1 ? 's' : ''}');
@@ -601,6 +750,7 @@ class VenteModel {
 }
 
 class VenteItemModel {
+  final List<LotAllocation> lots;
   final String medicamentId;
   final String medicamentNom;
   final int quantite;
@@ -610,6 +760,7 @@ class VenteItemModel {
   final double sousTotal;
 
   const VenteItemModel({
+    this.lots = const [],
     required this.medicamentId,
     required this.medicamentNom,
     required this.quantite,
@@ -621,6 +772,18 @@ class VenteItemModel {
 
   factory VenteItemModel.fromMap(Map<String, dynamic> map) {
     return VenteItemModel(
+      lots:
+          ((map['lots'] ??
+                      (map['lots_json'] == null
+                          ? []
+                          : jsonDecode(map['lots_json'] as String)))
+                  as List)
+              .map(
+                (entry) => LotAllocation.fromMap(
+                  Map<String, dynamic>.from(entry as Map),
+                ),
+              )
+              .toList(),
       medicamentId: map['medicament_id'] ?? '',
       medicamentNom: map['medicament_nom'] ?? '',
       quantite: map['quantite'] ?? 0,
@@ -633,6 +796,7 @@ class VenteItemModel {
 
   Map<String, dynamic> toMap() => {
     'medicament_id': medicamentId,
+    'lots': lots.map((entry) => entry.toMap()).toList(),
     'medicament_nom': medicamentNom,
     'quantite': quantite,
     'unite': unite,
@@ -642,6 +806,10 @@ class VenteItemModel {
   };
 
   double get beneficeItem => sousTotal - (prixAchat * quantite);
+  Map<String, dynamic> toSql() => {
+    ...(toMap()..remove('lots')),
+    'lots_json': jsonEncode(lots.map((entry) => entry.toMap()).toList()),
+  };
 }
 
 // ─── ACTIVITÉ ─────────────────────────────────────────────────────────────────
@@ -680,6 +848,23 @@ class ActiviteModel {
     'description': description,
     'metadata': metadata,
     'date': Timestamp.fromDate(date),
+  };
+
+  factory ActiviteModel.fromSql(Map<String, dynamic> row) =>
+      ActiviteModel.fromMap({
+        ...row,
+        'metadata': row['metadata'] == null
+            ? null
+            : jsonDecode(row['metadata'] as String),
+        'date': Timestamp.fromDate(DateTime.parse(row['date'] as String)),
+      }, row['id'] as String);
+
+  Map<String, dynamic> toSql({bool synced = false}) => {
+    ...toMap(),
+    'id': id,
+    'metadata': jsonEncode(metadata),
+    'date': date.toIso8601String(),
+    'synced': synced ? 1 : 0,
   };
 }
 

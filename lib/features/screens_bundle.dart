@@ -16,13 +16,17 @@ import '../repositories/medicament_repository.dart';
 import '../repositories/vente_repository.dart';
 import '../services/export_service.dart';
 import '../shared/widgets/pf_snackbar.dart';
+import '../core/errors/user_message.dart';
 
 // ─── REPORTS SCREEN ───────────────────────────────────────────────────────────
+final _exportEnCoursProvider = StateProvider.autoDispose<bool>((ref) => false);
+
 class ReportsScreen extends ConsumerWidget {
   const ReportsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final exporting = ref.watch(_exportEnCoursProvider);
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(title: const Text('Rapports & Exports')),
@@ -35,8 +39,9 @@ class ReportsScreen extends ConsumerWidget {
             icon: Icons.medication_outlined,
             titre: 'Liste complète des médicaments',
             description: 'Tous les médicaments avec quantités et prix',
-            onExcelTap: () =>
-                _handleExport(context, ref, 'excel', 'stock_complet'),
+            onPdfTap: exporting
+                ? null
+                : () => _handleExport(context, ref, 'stock_complet'),
           ),
           const SizedBox(height: AppSpacing.sm),
           _reportCard(
@@ -45,8 +50,9 @@ class ReportsScreen extends ConsumerWidget {
             titre: 'Stock faible & ruptures',
             description: 'Médicaments sous le seuil d\'alerte',
             color: AppColors.warning,
-            onExcelTap: () =>
-                _handleExport(context, ref, 'excel', 'stock_faible'),
+            onPdfTap: exporting
+                ? null
+                : () => _handleExport(context, ref, 'stock_faible'),
           ),
           const SizedBox(height: AppSpacing.sm),
           _reportCard(
@@ -55,7 +61,9 @@ class ReportsScreen extends ConsumerWidget {
             titre: 'Produits expirés / bientôt expirés',
             description: 'Médicaments à retirer ou surveiller',
             color: AppColors.danger,
-            onExcelTap: () => _handleExport(context, ref, 'excel', 'expires'),
+            onPdfTap: exporting
+                ? null
+                : () => _handleExport(context, ref, 'expires'),
           ),
           const SizedBox(height: AppSpacing.lg),
           _sectionTitle('Rapports de ventes'),
@@ -64,7 +72,9 @@ class ReportsScreen extends ConsumerWidget {
             icon: Icons.receipt_long_outlined,
             titre: 'Historique des ventes',
             description: 'Toutes les ventes avec détails et bénéfices',
-            onExcelTap: () => _handleExport(context, ref, 'excel', 'ventes'),
+            onPdfTap: exporting
+                ? null
+                : () => _handleExport(context, ref, 'ventes'),
           ),
           const SizedBox(height: AppSpacing.lg),
           _sectionTitle('Rapports fournisseurs'),
@@ -73,8 +83,9 @@ class ReportsScreen extends ConsumerWidget {
             icon: Icons.local_shipping_outlined,
             titre: 'Liste des fournisseurs',
             description: 'Coordonnées des fournisseurs actifs',
-            onExcelTap: () =>
-                _handleExport(context, ref, 'excel', 'fournisseurs'),
+            onPdfTap: exporting
+                ? null
+                : () => _handleExport(context, ref, 'fournisseurs'),
           ),
           const SizedBox(height: AppSpacing.xxl),
         ],
@@ -95,7 +106,7 @@ class ReportsScreen extends ConsumerWidget {
     required String titre,
     required String description,
     Color? color,
-    required VoidCallback onExcelTap,
+    required VoidCallback? onPdfTap,
   }) {
     final c = color ?? AppColors.primary;
     return Container(
@@ -132,13 +143,13 @@ class ReportsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          _exportBtn('Excel', Colors.green, onExcelTap),
+          _exportBtn('PDF', AppColors.danger, onPdfTap),
         ],
       ),
     );
   }
 
-  Widget _exportBtn(String label, Color color, VoidCallback onTap) {
+  Widget _exportBtn(String label, Color color, VoidCallback? onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -162,18 +173,20 @@ class ReportsScreen extends ConsumerWidget {
   Future<void> _handleExport(
     BuildContext context,
     WidgetRef ref,
-    String format,
     String type,
   ) async {
-    if (format != 'excel') {
-      PfSnackbar.info(context, 'Le format $format sera bientôt disponible.');
-      return;
-    }
-
+    final busy = ref.read(_exportEnCoursProvider.notifier);
+    if (busy.state) return;
     final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
     if (pharmacie == null) return;
+    final access = ref.read(repositoryAccessProvider);
+    final box = context.findRenderObject();
+    final origin = box is RenderBox && box.hasSize
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    busy.state = true;
 
-    PfSnackbar.info(context, 'Préparation de l\'export Excel...');
+    PfSnackbar.info(context, 'Préparation du rapport PDF...');
 
     try {
       if (type.startsWith('stock') || type == 'expires') {
@@ -188,31 +201,58 @@ class ReportsScreen extends ConsumerWidget {
               .toList();
         } else if (type == 'expires') {
           filtered = meds
-              .where((med) => med.estExpire || med.expireBientot)
+              .where((med) => med.contientExpires || med.expireBientot)
               .toList();
         }
 
-        await ExportService.exportStockToExcel(filtered);
+        await ExportService.exportStockToPdf(
+          filtered,
+          pharmacie: pharmacie,
+          access: access,
+          titre: switch (type) {
+            'stock_faible' => 'Stock faible et ruptures',
+            'expires' => 'Produits expirés ou bientôt expirés',
+            _ => 'Liste complète des médicaments',
+          },
+          sharePositionOrigin: origin,
+        );
       } else if (type == 'ventes') {
         final ventes = await ref
             .read(venteRepositoryProvider)
             .getHistoriqueVentes(pharmacie.id);
-        await ExportService.exportVentesToExcel(ventes);
+        await ExportService.exportVentesToPdf(
+          ventes,
+          pharmacie: pharmacie,
+          access: access,
+          sharePositionOrigin: origin,
+        );
       } else if (type == 'fournisseurs') {
         final suppliers = await ref
             .read(fournisseurRepositoryProvider)
             .getFournisseurs(pharmacie.id);
-        await ExportService.exportFournisseursToExcel(suppliers);
+        await ExportService.exportFournisseursToPdf(
+          suppliers,
+          pharmacie: pharmacie,
+          access: access,
+          sharePositionOrigin: origin,
+        );
       } else {
         PfSnackbar.info(context, 'Cet export est en cours de développement.');
         return;
       }
 
-      if (context.mounted)
-        PfSnackbar.success(context, 'Rapport généré avec succès !');
-    } catch (e) {
-      if (context.mounted)
-        PfSnackbar.error(context, 'Erreur lors de l\'export : $e');
+      if (context.mounted) {
+        PfSnackbar.success(context, 'Rapport PDF généré avec succès !');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        PfSnackbar.error(
+          context,
+          'Impossible de générer ou partager le PDF. Veuillez réessayer.',
+        );
+      }
+    } finally {
+      if (busy.mounted) busy.state = false;
     }
   }
 }
@@ -379,16 +419,17 @@ class SupportScreen extends StatelessWidget {
     ],
     [
       'L\'application fonctionne-t-elle sans internet ?',
-      'Après une première connexion et une synchronisation réussies, les données locales restent disponibles. Les modifications attendent une connexion et le compte autorisé. Un conflit entre appareils nécessite un rapprochement manuel. Ne désinstallez pas l’application tant que des opérations restent en attente.',
+      'Après une première connexion et une synchronisation réussies, les données locales restent disponibles. Les modifications attendent une connexion et le compte autorisé. En cas de conflit, ouvrez Paramètres > Suivi de synchronisation : les ventes compatibles peuvent être rapprochées après vérification. Les autres cas nécessitent le support. Ne désinstallez pas l’application tant que des opérations restent en attente.',
     ],
     [
       'Comment exporter mes rapports ?',
-      'Dans Rapports, choisissez un rapport puis Excel. Les exports reflètent les données présentes sur cet appareil.',
+      'Dans Rapports, choisissez un rapport puis PDF pour le partager ou l’enregistrer. Les exports reflètent les données présentes sur cet appareil. Vérifiez la synchronisation avant de les partager.',
     ],
   ];
 }
 
 // ─── SETTINGS SCREEN ─────────────────────────────────────────────────────────
+
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -511,6 +552,14 @@ class SettingsScreen extends ConsumerWidget {
           _settingsGroup('Données', [
             _settingsTile(
               context,
+              Icons.fact_check_outlined,
+              'Suivi de synchronisation',
+              'Vérifier les opérations en attente',
+              () => context.push('/synchronisation'),
+              key: const ValueKey('settings_sync_details'),
+            ),
+            _settingsTile(
+              context,
               Icons.sync_outlined,
               'Synchroniser maintenant',
               '',
@@ -521,23 +570,15 @@ class SettingsScreen extends ConsumerWidget {
               ),
               key: const ValueKey('settings_sync'),
             ),
+          ]),
+
+          _settingsGroup('Options avancées', [
             _settingsTile(
               context,
               Icons.backup_outlined,
-              'Sauvegarde locale',
-              'JSON confidentiel, sans restauration automatique',
-              () => _run(
-                context,
-                () async {
-                  final owner = ref.read(currentUserProvider)?.uid;
-                  if (owner == null) throw StateError('Connexion requise');
-                  await ExportService.backup(
-                    owner,
-                    ref.read(repositoryAccessProvider),
-                  );
-                },
-                'Sauvegarde préparée. Conservez-la dans un emplacement sûr.',
-              ),
+              'Sauvegarde et restauration',
+              'Copie chiffrée protégée par une phrase secrète',
+              () => context.push('/sauvegardes'),
               key: const ValueKey('settings_backup'),
             ),
           ]),
@@ -595,7 +636,7 @@ class SettingsScreen extends ConsumerWidget {
       await action();
       if (context.mounted) PfSnackbar.success(context, message);
     } catch (error) {
-      if (context.mounted) PfSnackbar.error(context, '$error');
+      if (context.mounted) PfSnackbar.error(context, userMessage(error));
     }
   }
 
@@ -647,11 +688,12 @@ class SettingsScreen extends ConsumerWidget {
     IconData icon,
     String titre,
     String sous,
-    VoidCallback onTap, {
+    VoidCallback? onTap, {
     Key? key,
   }) {
     return ListTile(
       key: key,
+      enabled: onTap != null,
       leading: Container(
         width: 36,
         height: 36,

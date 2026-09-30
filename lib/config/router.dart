@@ -10,12 +10,15 @@ import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/stock/presentation/stock_screen.dart';
 import '../features/stock/presentation/medicament_form_screen.dart';
 import '../features/stock/presentation/medicament_detail_screen.dart';
+import '../features/stock/presentation/lots_screen.dart';
 import '../features/sales/presentation/vente_screen.dart';
 import '../features/sales/presentation/historique_ventes_screen.dart';
 import '../features/suppliers/presentation/fournisseurs_screen.dart';
 import '../features/reports/reports_screen.dart';
 import '../features/support/support_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/settings/sync_screen.dart';
+import '../features/settings/backup_screen.dart';
 import '../shared/widgets/main_scaffold.dart';
 import 'auth_provider.dart';
 import 'access_policy.dart';
@@ -49,6 +52,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/configurer', builder: (_, __) => const RegisterScreen()),
       GoRoute(path: '/acces', builder: (_, __) => const AccessScreen()),
+      GoRoute(path: '/synchronisation', builder: (_, __) => const SyncScreen()),
+      GoRoute(path: '/sauvegardes', builder: (_, __) => const BackupScreen()),
       // Main app - Shell avec bottom nav
       ShellRoute(
         builder: (context, state, child) => MainScaffold(child: child),
@@ -90,6 +95,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/medicament/:id/modifier',
         builder: (_, state) =>
             MedicamentFormScreen(medicamentId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: '/medicament/:id/lots',
+        builder: (_, state) => LotsScreen(id: state.pathParameters['id']!),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

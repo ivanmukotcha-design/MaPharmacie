@@ -7,6 +7,7 @@ import '../../../config/auth_provider.dart';
 import '../../../shared/widgets/pf_badge.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
 import '../../../repositories/medicament_repository.dart';
+import '../../../models/models.dart';
 
 class MedicamentDetailScreen extends ConsumerWidget {
   final String id;
@@ -63,30 +64,16 @@ class MedicamentDetailScreen extends ConsumerWidget {
     Map<String, dynamic> med,
     dynamic pharmacie,
   ) {
+    final model = MedicamentModel.fromSql(med);
     final now = DateTime.now();
-    final totalBoites = med['unite_prix'] == 'flacon'
-        ? med['flacons'] as int
-        : (med['cartons'] as int) * (med['cartons_par_boite'] as int) +
-              (med['boites'] as int);
     final seuil = med['seuil_alerte'] as int;
-    final totalBase =
-        (med['cartons'] as int) *
-            (med['cartons_par_boite'] as int) *
-            (med['boites_par_plaquette'] as int) *
-            (med['plaquettes_par_comprime'] as int) +
-        (med['boites'] as int) *
-            (med['boites_par_plaquette'] as int) *
-            (med['plaquettes_par_comprime'] as int) +
-        (med['plaquettes'] as int) * (med['plaquettes_par_comprime'] as int) +
-        (med['comprimes'] as int) +
-        (med['flacons'] as int);
 
     Color statutColor;
     String statutLabel;
-    if (totalBase == 0) {
+    if (model.estEnRupture) {
       statutColor = AppColors.danger;
       statutLabel = 'En rupture';
-    } else if (totalBoites <= seuil) {
+    } else if (model.estStockFaible) {
       statutColor = AppColors.warning;
       statutLabel = 'Stock faible';
     } else {
@@ -96,7 +83,7 @@ class MedicamentDetailScreen extends ConsumerWidget {
 
     final dateExpStr = med['date_expiration'] as String?;
     final dateExp = dateExpStr != null ? DateTime.tryParse(dateExpStr) : null;
-    final expire = dateExp != null && dateExp.isBefore(now);
+    final expire = model.contientExpires;
     final joursRestants = dateExp != null
         ? dateExp.difference(now).inDays
         : null;
@@ -215,6 +202,28 @@ class MedicamentDetailScreen extends ConsumerWidget {
           ),
         ),
 
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/medicament/$id/lots'),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Lots et mouvements'),
+                ),
+                if (model.suiviLots)
+                  Text(
+                    'Vendable : ${model.unitesVendables.affichage} • ${model.lots!.length} lot(s)',
+                  ),
+                if (model.suiviLots && model.contientExpires)
+                  const Text(
+                    'Des lots expirés sont exclus des ventes. Consultez les lots.',
+                  ),
+              ],
+            ),
+          ),
+        ),
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverList(
@@ -226,7 +235,9 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   const SizedBox(width: 8),
                   if (dateExp != null)
                     PfBadge(
-                      label: expire ? 'Expiré' : 'Expire dans $joursRestants j',
+                      label: expire
+                          ? (model.suiviLots ? 'Lot expiré' : 'Expiré')
+                          : 'Expire dans $joursRestants j',
                       color:
                           expire ||
                               (joursRestants != null && joursRestants <= 30)
@@ -244,9 +255,13 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   med['unite_prix'] as String? ?? 'boite',
                 ),
                 _ligneInfo(
-                  'Prix d’achat',
+                  model.suiviLots
+                      ? 'Achat de référence (voir lots)'
+                      : 'Prix d’achat',
                   med['prix_achat'] == null
-                      ? 'À renseigner avant toute vente'
+                      ? (model.suiviLots
+                            ? 'Coûts renseignés par lot'
+                            : 'À renseigner avant toute vente')
                       : '${(med['prix_achat'] as num).toStringAsFixed(2)} FC',
                 ),
                 _ligneInfo(

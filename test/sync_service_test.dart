@@ -9,6 +9,7 @@ import 'package:pharmaflow/repositories/repository_access.dart';
 import 'package:pharmaflow/repositories/vente_repository.dart';
 import 'package:pharmaflow/services/sync_service.dart';
 import 'fixtures.dart';
+import 'package:pharmaflow/local_database/sync_codec.dart';
 
 void main() {
   sqfliteFfiInit();
@@ -223,6 +224,287 @@ void main() {
         (await cloud.doc('pharmacies/pharma-1/medicaments/med-1').get())
             .data()!['revision'],
         1,
+      );
+    },
+  );
+
+  test(
+    'Un conflit ne bloque ni les opérations indépendantes ni leur téléchargement',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      await sales.effectuerVente(vente(id: 'sale-2'));
+      await medicines.saveMedicament(medicament(id: 'independent'));
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 2,
+      });
+      await cloud
+          .doc('pharmacies/pharma-1/medicaments/cloud-only')
+          .set(medicament(id: 'cloud-only').copyWith(revision: 1).toMap());
+      await expectLater(sync.sync(), throwsStateError);
+      expect(await db.query('sync_queue'), hasLength(2));
+      expect(
+        (await cloud.doc('pharmacies/pharma-1/medicaments/independent').get())
+            .exists,
+        isTrue,
+      );
+      expect(
+        await db.query(
+          'medicaments',
+          where: 'id = ?',
+          whereArgs: ['cloud-only'],
+        ),
+        hasLength(1),
+      );
+      expect(
+        (await db.query(
+          'medicaments',
+          where: 'id = ?',
+          whereArgs: ['med-1'],
+        )).single['synced'],
+        0,
+      );
+      await expectLater(
+        sales.effectuerVente(vente(id: 'sale-3')),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'Rapprocher deux ventes hors ligne déduit le stock serveur sans perdre ses autres changements',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      await sales.effectuerVente(vente(id: 'sale-2'));
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 2,
+        'nom': 'Nom corrigé',
+        'unites': const UnitesStock(boites: 7).toMap(),
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      final first = (await sync.pendingOperations()).first;
+      final preview = await sync.previewSaleReconciliation(first.id);
+      expect(preview.stocks.single.unites.totalBoites, 7);
+      await sync.reconcileSale(preview);
+      expect(await db.query('sync_queue'), hasLength(1));
+      expect((await db.query('medicaments')).single['synced'], 0);
+      await expectLater(sync.sync(), throwsStateError);
+      final second = (await sync.pendingOperations()).single;
+      await sync.reconcileSale(await sync.previewSaleReconciliation(second.id));
+      final local = MedicamentModel.fromSql(
+        (await db.query('medicaments')).single,
+      );
+      expect(local.unites.totalBoites, 3);
+      expect(local.nom, 'Nom corrigé');
+      expect((await db.query('medicaments')).single['synced'], 1);
+      expect(await db.query('sync_queue'), isEmpty);
+      expect(
+        (await cloud.collection('pharmacies/pharma-1/ventes').get()).docs,
+        hasLength(2),
+      );
+    },
+  );
+
+  test(
+    'Un stock changé après prévisualisation ne peut pas être confirmé',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 2,
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      final preview = await sync.previewSaleReconciliation(
+        (await sync.pendingOperations()).single.id,
+      );
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 3,
+      });
+      await expectLater(sync.reconcileSale(preview), throwsStateError);
+      expect(await db.query('sync_queue'), hasLength(1));
+      expect(
+        (await cloud.collection('pharmacies/pharma-1/ventes').get()).docs,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'Stock insuffisant ou conditionnement modifié : aucun rapprochement automatique',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      final reference = cloud.doc('pharmacies/pharma-1/medicaments/med-1');
+      await reference.update({
+        'revision': 2,
+        'unites': const UnitesStock(boites: 1).toMap(),
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      final id = (await sync.pendingOperations()).single.id;
+      await expectLater(sync.previewSaleReconciliation(id), throwsStateError);
+      await reference.update({
+        'unites': const UnitesStock(boites: 10, cartonsParBoite: 12).toMap(),
+      });
+      await expectLater(sync.previewSaleReconciliation(id), throwsStateError);
+      expect(await db.query('sync_queue'), hasLength(1));
+    },
+  );
+
+  test(
+    'Une correction de fiche dépendante interdit le rapprochement isolé de la vente',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      final local = MedicamentModel.fromSql(
+        (await db.query('medicaments')).single,
+      );
+      await medicines.saveMedicament(
+        local.copyWith(unites: const UnitesStock(boites: 20)),
+        isEdit: true,
+      );
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 2,
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      await expectLater(
+        sync.previewSaleReconciliation(
+          (await sync.pendingOperations()).first.id,
+        ),
+        throwsStateError,
+      );
+      expect(await db.query('sync_queue'), hasLength(2));
+    },
+  );
+
+  test(
+    'Le reçu durable empêche le rejeu d’une ancienne modification après une vente',
+    () async {
+      await medicines.saveMedicament(medicament());
+      final original = Map<String, Object?>.from(
+        (await db.query('sync_queue')).single,
+      );
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      await sync.sync();
+      await db.insert('sync_queue', original);
+      await sync.sync();
+      final remote = await cloud
+          .doc('pharmacies/pharma-1/medicaments/med-1')
+          .get();
+      expect(
+        UnitesStock.fromMap(
+          Map<String, dynamic>.from(remote.data()!['unites']),
+        ).totalBoites,
+        8,
+      );
+      expect(remote.data()!['revision'], 2);
+      expect(await db.query('sync_queue'), isEmpty);
+    },
+  );
+
+  test(
+    'Un identifiant d’opération réutilisé avec un autre contenu est refusé',
+    () async {
+      await medicines.saveMedicament(medicament());
+      final original = Map<String, Object?>.from(
+        (await db.query('sync_queue')).single,
+      );
+      await sync.sync();
+      final data = SyncCodec.decode(original['data'] as String);
+      data['document']['nom'] = 'Contenu différent';
+      original['data'] = SyncCodec.encode(data);
+      await db.insert('sync_queue', original);
+      await expectLater(sync.sync(), throwsStateError);
+      expect(await db.query('sync_queue'), hasLength(1));
+      expect(
+        (await cloud.doc('pharmacies/pharma-1/medicaments/med-1').get())
+            .data()!['nom'],
+        medicament().nom,
+      );
+    },
+  );
+
+  test(
+    'Un changement de session interdit de confirmer un rapprochement',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      final preview = await sync.previewSaleReconciliation(
+        (await sync.pendingOperations()).single.id,
+      );
+      signedIn = false;
+      await expectLater(sync.reconcileSale(preview), throwsStateError);
+      expect(
+        (await cloud.collection('pharmacies/pharma-1/ventes').get()).docs,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'Une opération legacy reste visible et ne donne pas un faux succès',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await db.update('sync_queue', {
+        'operation': 'legacy',
+        'data': '{ancien format}',
+        'last_error': 'Ancienne opération : contactez le support.',
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      expect(sync.status.error, isNotNull);
+      expect(await db.query('sync_queue'), hasLength(1));
+    },
+  );
+
+  test(
+    'Un conflit protège aussi les produits des opérations dépendantes transitives',
+    () async {
+      await medicines.saveMedicament(medicament());
+      await medicines.saveMedicament(medicament(id: 'med-2'));
+      await sync.sync();
+      await sales.effectuerVente(vente());
+      await sales.effectuerVente(
+        vente(
+          id: 'sale-linked',
+          items: [
+            venteItem(),
+            venteItem(id: 'med-2'),
+          ],
+        ),
+      );
+      await sales.effectuerVente(
+        vente(
+          id: 'sale-dependent',
+          items: [venteItem(id: 'med-2')],
+        ),
+      );
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-1').update({
+        'revision': 2,
+      });
+      await cloud.doc('pharmacies/pharma-1/medicaments/med-2').update({
+        'revision': 2,
+      });
+      await expectLater(sync.sync(), throwsStateError);
+      expect(await db.query('sync_queue'), hasLength(3));
+      await expectLater(
+        sales.effectuerVente(
+          vente(
+            id: 'blocked-sale',
+            items: [venteItem(id: 'med-2')],
+          ),
+        ),
+        throwsStateError,
+      );
+      expect(
+        (await cloud.collection('pharmacies/pharma-1/ventes').get()).docs,
+        isEmpty,
       );
     },
   );

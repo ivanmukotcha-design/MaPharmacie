@@ -187,6 +187,7 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
         prixAchat: parseDecimal(_prixAchatCtrl.text)!,
         unitePrix: _unitePrix,
         revision: _original?.revision ?? 0,
+        lots: _original?.lots,
         imageUrl: _original?.imageUrl,
         fournisseurId: _fournisseurId,
         fournisseurNom: _fournisseurCtrl.text.trim(),
@@ -322,9 +323,11 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
                           DropdownMenuItem(value: unit, child: Text(unit)),
                     )
                     .toList(),
-                onChanged: (unit) {
-                  if (unit != null) setState(() => _unitePrix = unit);
-                },
+                onChanged: _original?.suiviLots == true
+                    ? null
+                    : (unit) {
+                        if (unit != null) setState(() => _unitePrix = unit);
+                      },
               ),
               const SizedBox(height: 14),
               PfTextField(
@@ -373,6 +376,10 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
             const SizedBox(height: 16),
 
             _section('Stock & Unités', [
+              if (_original?.suiviLots == true)
+                const Text(
+                  'Quantités et conversions verrouillées : utilisez « Lots et mouvements » depuis la fiche produit.',
+                ),
               _conversionCard(),
               const SizedBox(height: 14),
               Text(
@@ -414,52 +421,53 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
 
             const SizedBox(height: 16),
 
-            _section('Date de péremption', [
-              GestureDetector(
-                onTap: _pickDate,
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        color: _dateExpiration != null
-                            ? AppColors.primary
-                            : AppColors.textMuted,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _dateExpiration != null
-                              ? '${_dateExpiration!.day.toString().padLeft(2, '0')}/${_dateExpiration!.month.toString().padLeft(2, '0')}/${_dateExpiration!.year}'
-                              : 'Sélectionner la date d\'expiration',
-                          style: AppTextStyles.body.copyWith(
-                            color: _dateExpiration != null
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
+            if (_original?.suiviLots != true)
+              _section('Date de péremption', [
+                GestureDetector(
+                  onTap: _pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_outlined,
+                          color: _dateExpiration != null
+                              ? AppColors.primary
+                              : AppColors.textMuted,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _dateExpiration != null
+                                ? '${_dateExpiration!.day.toString().padLeft(2, '0')}/${_dateExpiration!.month.toString().padLeft(2, '0')}/${_dateExpiration!.year}'
+                                : 'Sélectionner la date d\'expiration',
+                            style: AppTextStyles.body.copyWith(
+                              color: _dateExpiration != null
+                                  ? AppColors.textPrimary
+                                  : AppColors.textMuted,
+                            ),
                           ),
                         ),
-                      ),
-                      if (_dateExpiration != null)
-                        GestureDetector(
-                          onTap: () => setState(() => _dateExpiration = null),
-                          child: const Icon(
-                            Icons.close,
-                            color: AppColors.textMuted,
-                            size: 18,
+                        if (_dateExpiration != null)
+                          GestureDetector(
+                            onTap: () => setState(() => _dateExpiration = null),
+                            child: const Icon(
+                              Icons.close,
+                              color: AppColors.textMuted,
+                              size: 18,
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ]),
+              ]),
 
             const SizedBox(height: 24),
 
@@ -570,6 +578,7 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
               Expanded(
                 child: TextFormField(
                   controller: ctrl,
+                  enabled: _original?.suiviLots != true,
                   validator: (value) => validateQuantity(value, positive: true),
                   keyboardType: TextInputType.number,
                   style: AppTextStyles.small,
@@ -614,6 +623,7 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
           const SizedBox(height: 4),
           TextFormField(
             controller: ctrl,
+            enabled: _original?.suiviLots != true,
             validator: validateQuantity,
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,

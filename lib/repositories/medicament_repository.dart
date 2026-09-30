@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
 import '../local_database/local_database.dart';
 import '../models/models.dart';
 import '../services/sync_service.dart';
 import 'repository_access.dart';
+import 'sync_write_guard.dart';
+import 'stock_movement.dart';
 
 final medicamentRepositoryProvider = Provider<MedicamentRepository>((ref) {
   final sync = ref.watch(syncServiceProvider);
@@ -34,6 +37,9 @@ class MedicamentRepository {
     final db = await _database();
     await db.transaction((transaction) async {
       _access.write(medicament.pharmacieId);
+      await ensureNoSyncIssue(transaction, medicament.pharmacieId, {
+        'medicaments/${medicament.id}',
+      });
       final rows = await transaction.query(
         'medicaments',
         where: 'id = ? AND pharmacie_id = ?',
@@ -46,6 +52,22 @@ class MedicamentRepository {
           ? null
           : MedicamentModel.fromSql(rows.first);
       final revision = previous?.revision ?? 0;
+      if ((previous?.suiviLots ?? false) &&
+          (!medicament.suiviLots ||
+              medicament.unitePrix != previous!.unitePrix ||
+              jsonEncode(medicament.unites.toMap()) !=
+                  jsonEncode(previous.unites.toMap()) ||
+              jsonEncode(medicament.lots!.map((lot) => lot.toMap()).toList()) !=
+                  jsonEncode(
+                    previous.lots!.map((lot) => lot.toMap()).toList(),
+                  ))) {
+        throw StateError(
+          'Modifiez les quantités dans « Lots et mouvements ». Le conditionnement est verrouillé.',
+        );
+      }
+      if (medicament.suiviLots && !(previous?.suiviLots ?? false)) {
+        throw StateError('Activez le suivi depuis « Lots et mouvements ».');
+      }
       if (medicament.revision != revision) {
         throw StateError(
           'Le stock a changé. Rechargez le médicament avant de modifier.',
@@ -66,12 +88,29 @@ class MedicamentRepository {
       } else {
         await transaction.insert('medicaments', local);
       }
+      final activities = <Map<String, dynamic>>[];
+      if (updated.stockTotal != (previous?.stockTotal ?? 0)) {
+        final movement = stockMovement(
+          updated,
+          before: previous?.stockTotal ?? 0,
+          kind: previous == null ? 'initial' : 'correction',
+          reason: previous == null
+              ? 'Création de fiche'
+              : 'Modification de fiche',
+        );
+        await transaction.insert('activites', movement.toSql());
+        activities.add(movementPayload(movement));
+      }
       await LocalDatabase.addToSyncQueue(
         executor: transaction,
         collection: 'pharmacies/${updated.pharmacieId}/medicaments',
         docId: updated.id,
         operation: 'set',
-        data: {'document': cloud, 'expected_revision': revision},
+        data: {
+          'document': cloud,
+          'expected_revision': revision,
+          'activities': activities,
+        },
       );
     });
     LocalDatabase.notifyChanged();

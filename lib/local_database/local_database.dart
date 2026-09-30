@@ -10,7 +10,7 @@ class LocalDatabase {
   static Future<Database>? _opening;
   static final _changes = StreamController<int>.broadcast();
   static int _changeVersion = 0;
-  static const _version = 2;
+  static const _version = 3;
   static const _dbName = 'pharmaflow.db';
 
   static Future<Database> get database async {
@@ -155,6 +155,7 @@ class LocalDatabase {
     ''');
 
     await _addQueueMetadata(db);
+    await _addLots(db);
 
     // Index pour performances
     await db.execute(
@@ -209,6 +210,15 @@ class LocalDatabase {
         "UPDATE medicaments SET unite_prix = 'flacon' WHERE flacons > 0 AND cartons = 0 AND boites = 0 AND plaquettes = 0 AND comprimes = 0",
       );
     }
+    if (oldVersion < 3) await _addLots(db);
+  }
+
+  static Future<void> _addLots(DatabaseExecutor db) async {
+    await db.execute('ALTER TABLE medicaments ADD COLUMN lots_json TEXT');
+    await db.execute('ALTER TABLE vente_items ADD COLUMN lots_json TEXT');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_activites_pharmacie ON activites(pharmacie_id, date)',
+    );
   }
 
   static Future<void> _addQueueMetadata(DatabaseExecutor db) async {

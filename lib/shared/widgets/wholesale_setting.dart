@@ -18,11 +18,11 @@ class _WholesaleSettingState extends ConsumerState<WholesaleSetting> {
   Widget build(BuildContext context) {
     final pharmacie = ref.watch(currentPharmacieProvider).valueOrNull;
     return SwitchListTile(
-      title: const Text('Tarifs de gros'),
+      title: const Text('Tarifs de gros (facultatif)'),
       subtitle: Text(
         _saving
             ? 'Enregistrement…'
-            : 'Facultatifs, en plus du détail. Réglage commun à tous les appareils, connexion nécessaire.',
+            : 'Ajoute un prix de gros au prix de détail. La vente par carton reste possible sans cette option.\nRéglage commun à tous les appareils ; connexion nécessaire pour le modifier.',
       ),
       value: ref.watch(wholesaleEnabledProvider),
       onChanged: _saving || pharmacie == null

@@ -29,7 +29,8 @@ ne crée pas de projet Firebase et n’exige aucun compte préparé par un techn
   ce réglage commercial n’est pas une permission de sécurité.
 - Vente, articles, déduction du stock et file d’envoi enregistrés ensemble dans SQLite.
   Contrôle des prix, quantités et péremptions ; flacons séparés des comprimés.
-- Historique, indicateurs, fournisseurs, exports Excel et sauvegarde JSON locale.
+- Historique, indicateurs, fournisseurs et exports PDF.
+- Sauvegarde locale chiffrée et restauration contrôlée depuis les options avancées.
 - Synchronisation au démarrage, après écriture, au retour réseau, toutes les cinq
   minutes et manuellement ; état et erreurs visibles.
 - Réception FCM et notifications locales. Pas encore d’alertes stock planifiées.
@@ -146,11 +147,33 @@ Les UUID et révisions permettent une reprise idempotente et détectent les écr
 concurrentes. Une vente et ses stocks sont envoyés dans une transaction Firestore.
 Le téléchargement ne remplace pas les lignes locales en attente.
 
-En cas de conflit entre appareils ou de refus serveur, **données et file sont
-conservées**, l’envoi s’arrête avec une erreur visible. Une vente locale hors ligne
-peut donc ne pas être acceptée sur le serveur. Ne pas désinstaller, vider la base
-ou effacer la file : exporter une sauvegarde et rapprocher stocks et ventes.
-La résolution des conflits reste manuelle, et non transparente entre appareils.
+En cas de conflit entre appareils, **données et file sont conservées**. Les opérations
+indépendantes continuent ; les opérations dépendantes restent en attente. Une erreur
+réseau ou un refus Firebase arrête la tentative. Les documents locaux en attente ne
+sont jamais remplacés par un téléchargement. Les nouvelles modifications des produits
+en conflit sont bloquées jusqu’à vérification.
+
+**Paramètres > Données > Suivi de synchronisation** affiche les opérations en attente.
+Une vente peut être rapprochée explicitement : aperçu du stock serveur avant/après,
+confirmation, puis nouvelle vérification dans une transaction. Le rapprochement conserve
+les prix et la date de la vente et déduit ses quantités du stock actuel du serveur.
+Un stock insuffisant, un conditionnement modifié, une fiche archivée, une opération
+précédente liée ou une modification de fiche ultérieure empêchent ce rapprochement.
+Les modifications de fiches et anciennes opérations `legacy` restent à traiter avec
+le support, après sauvegarde : aucun bouton n’écrase aveuglément le stock serveur.
+
+Chaque nouvelle opération envoyée crée un reçu immuable dans
+`pharmacies/{uid}/activites/sync_{operation_id}`, dans la même transaction.
+Son empreinte SHA-256 et l’identifiant d’opération permettent la reprise après une
+interruption ou une restauration sans appliquer deux fois la même opération.
+Les anciennes opérations sans reçu restent soumises aux contrôles de révision ;
+elles peuvent nécessiter le support. Les règles actuelles de `activites` autorisent
+ces reçus, sans ajout de collection ni modification de règles à déployer.
+
+Une vente locale hors ligne peut toujours dépasser le stock réellement disponible
+sur l’ensemble des appareils et être refusée à l’envoi. Cette évolution ne constitue
+pas une réservation centralisée en temps réel. Ne pas désinstaller, vider la base ou
+effacer la file tant que des opérations restent en attente.
 
 Le compte doit avoir été connecté et son profil récupéré pour utiliser
 les données mises en cache hors ligne. Une révocation ne peut pas effacer
@@ -163,11 +186,107 @@ sont **pas encore implémentées**. Le compte partagé ne permet pas d’identif
 l’employé à l’origine de chaque vente. Les administrateurs du projet Firebase
 conservent leurs accès techniques ; il ne s’agit pas d’un chiffrement de bout en bout.
 
-SQLite et les sauvegardes JSON ne sont pas chiffrés. Les données sont conservées à
-la déconnexion pour préserver les opérations hors ligne et filtrées par propriétaire.
-Protéger les appareils et les sauvegardes.
+SQLite reste non chiffré. Les données sont conservées à la déconnexion pour préserver
+les opérations hors ligne et filtrées par propriétaire. Protéger les appareils.
+
+## Sauvegarde et restauration
+
+Ouvrir **Paramètres > Options avancées > Sauvegarde et restauration**.
+
+- Créer une copie `.pfbackup` avec une phrase secrète d’au moins 12 caractères,
+  distincte du mot de passe Firebase. Elle n’est pas conservée dans l’application.
+  Sans cette phrase, la copie chiffrée est irrécupérable.
+- Chiffrement authentifié AES-256-GCM ; clé dérivée par PBKDF2-HMAC-SHA256
+  (600 000 itérations), sel aléatoire 16 octets et nonce aléatoire 12 octets, via
+  `cryptography`. Les calculs s’effectuent hors du thread de l’interface.
+- Seules les données locales du compte courant sont incluses : produits, fournisseurs,
+  ventes et articles, activités locales et file d’envoi avec ses identifiants d’origine.
+  Le profil Firebase, les fichiers/images distants et les identifiants de connexion
+  ne sont pas inclus. Une copie locale n’est pas une sauvegarde du serveur.
+- Enregistrer le fichier partagé sur un autre support. Un partage annulé ne signifie
+  pas que la copie est conservée ailleurs. Les fichiers temporaires sont chiffrés.
+- Pour restaurer, se connecter au **même compte**, choisir le fichier et sa phrase,
+  vérifier le résumé puis confirmer. Les anciens JSON de format 1 / schéma 2 sont
+  acceptés avec un avertissement : ils ne sont ni chiffrés ni authentifiés.
+- La restauration est refusée si ce compte possède déjà des opérations locales en
+  attente. Les autres comptes sont préservés. Un identifiant appartenant à un autre
+  compte, une vente différente portant le même identifiant ou un fichier incohérent
+  annule entièrement l’import, dans une transaction SQLite.
+- Les fiches existantes sans opération importée sont préservées. Les fiches liées
+  à des opérations importées retrouvent leur état local sauvegardé en attendant la
+  synchronisation ; cela peut provoquer un conflit à résoudre. Les opérations sont
+  restaurées dans leur ordre initial, avec leurs identifiants d’origine.
+- Les documents déjà synchronisés de la copie sont réimportés localement, mais ne sont
+  pas recréés automatiquement sur un serveur effacé. Ce flux vise la récupération
+  d’un appareil, pas la reconstruction d’un projet Firebase détruit.
+- Vérifier le suivi de synchronisation avant de reprendre les ventes. Ne pas reprendre
+  une même file hors ligne sur plusieurs appareils à la fois. Les identifiants empêchent
+  les doublons d’une même opération, pas deux saisies distinctes de la même vente réelle.
+- Limites de cette version : 23 Mio de données avant chiffrement, fichier 32 Mio maximum,
+  100 000 lignes importées. Au-delà, contacter le support ; aucune troncature silencieuse.
+
+### Recette manuelle avant mise en service
+
+1. Sur deux appareils de test du même compte, synchroniser un produit avec 10 boîtes.
+2. Hors ligne, vendre 2 boîtes sur le premier et 3 sur le second. Reconnecter le premier,
+   puis le second ; vérifier le conflit et rapprocher la seconde vente : stock final 5.
+3. Refaire avec une quantité cumulée supérieure au stock ; le rapprochement doit être
+   refusé, sans suppression de vente ni stock négatif.
+4. Pendant un conflit, vendre un autre produit indépendant et vérifier son envoi.
+5. Créer une copie avec des opérations hors ligne, la sauvegarder hors du téléphone,
+   restaurer sur un appareil de test et vérifier les totaux après synchronisation.
+6. Réimporter cette copie après synchronisation : aucune vente ni déduction supplémentaire.
+7. Essayer une phrase erronée, un fichier altéré et un compte différent : aucun import.
+8. Vérifier sur Android/iOS le sélecteur de fichier, le partage, le bouton Retour et
+   la fermeture/réouverture de l’application avec une file non vide.
 
 ## Validation locale
+
+### Lots et mouvements de stock
+
+- Depuis **Stock → fiche produit → Lots et mouvements**, activer le suivi pour chaque
+  produit souhaité. SQLite migre automatiquement du schéma 2 au schéma 3, sans modifier
+  les quantités ni activer le suivi sur les produits existants.
+- **Avant activation en production** : faire une sauvegarde, synchroniser les appareils,
+  publier les règles `firestore.rules` de cette version et mettre tous les appareils à jour.
+  Les règles bloquent les anciennes applications lorsqu’elles tentent de modifier un
+  produit suivi par lots. Aucun déploiement Firebase n’est réalisé par les tests locaux.
+- L’activation conserve le stock dans un lot « Stock initial » avec son coût d’achat
+  de référence et sa date actuelle. Vérifier ces données avant activation. Le mode lots
+  ne se désactive pas depuis l’interface ; conversions et unité tarifée restent figées.
+- Réceptionner un lot avec numéro, quantité/unité, prix d’achat par unité réceptionnée,
+  péremption obligatoire et fournisseur facultatif. Stockage en comprimés ou flacons.
+  Le prix de vente reste celui du produit. Les bénéfices utilisent le coût réellement
+  alloué aux lots de la vente, et non le coût de référence de la fiche.
+- Les ventes consomment en priorité les lots qui expirent le plus tôt (FEFO). Les dates
+  inconnues du stock initial restent vendables en dernier et sont signalées. Un lot est
+  expiré à partir du lendemain de sa date. Les quantités expirées restent dans le stock
+  physique mais sont exclues du disponible, des ventes et des calculs de seuils.
+- Pour une casse, un retrait pour péremption ou un comptage, corriger le **nouveau total
+  physique du lot**, en unités de base, avec un motif obligatoire. Ce n’est ni une vente
+  ni un retour client. Les erreurs de lot/coût/date ne se réécrivent pas rétroactivement :
+  corriger la quantité et enregistrer un nouveau lot correctement identifié si nécessaire.
+- Les créations de stock, modifications de quantités, activations, réceptions, corrections
+  et ventes créent des mouvements immuables, synchronisés atomiquement avec le stock.
+  L’historique commence avec cette version ; aucun ancien mouvement n’est inventé.
+  Avec le compte partagé, aucun vendeur individuel ne peut être identifié.
+- Les soldes avant/après des mouvements correspondent à la saisie locale. En rapprochement,
+  le serveur peut avoir un autre solde. Une vente conserve ses lots/coûts d’origine :
+  si ces lots sont indisponibles, le rapprochement est refusé sans les remplacer en silence.
+- Les lots sont intégrés aux PDF de stock et aux sauvegardes (schéma 3 ; import schéma 2
+  encore accepté). Les allocations vendues restent dans l’historique et les mouvements.
+- Limite : 200 lots conservés par produit. Lors d’une réception, les lots épuisés sortent
+  de la fiche active ; les ventes et mouvements historiques ne sont pas supprimés.
+  Un inventaire global, les retours clients et les tickets PDF restent des étapes séparées.
+
+Recette : activer un produit test, réceptionner deux lots de dates et coûts différents,
+vendre une quantité couvrant les deux, vérifier les coûts, les unités et les mouvements.
+Tester un lot expiré, une correction à zéro, puis synchroniser sur un deuxième appareil.
+Provoquer ensuite une vente concurrente sur le même lot : un conflit doit rester visible,
+sans déduction supplémentaire ni réaffectation à un autre lot. Tester enfin la sauvegarde
+et restauration des lots et des mouvements avant d’utiliser de vraies données.
+
+### Commandes
 
 ```sh
 flutter analyze --no-pub --no-fatal-infos
@@ -183,8 +302,9 @@ réseau, ventes concurrentes, notifications et partage).
 
 ## Limites restantes
 
-- Pas d’approbation des appareils, de résolution guidée des conflits, de restauration
-  JSON automatique, d’export Word, de lots ou d’inventaire rapproché.
+- Pas d’approbation des appareils, de résolution guidée des conflits de fiches,
+  d’export Word ou d’inventaire global rapproché. Le rapprochement guidé concerne
+  uniquement les ventes compatibles ; les cas ambigus restent conservés pour le support.
 - Les règles vérifient accès, forme et révisions, pas tous les calculs d’une vente.
   Un backend de confiance est nécessaire contre un client autorisé modifié.
 - Montants en `double`, sans politique comptable complète d’arrondi.
