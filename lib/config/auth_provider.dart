@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../services/notification_service.dart';
 import '../core/utils/validators.dart';
+import '../services/client_directory_service.dart';
 
 final firestoreProvider = Provider<FirebaseFirestore>(
   (ref) => FirebaseFirestore.instance,
@@ -25,12 +28,23 @@ final currentPharmacieProvider = StreamProvider<PharmacieModel?>((ref) {
       .watch(firestoreProvider)
       .collection('pharmacies')
       .doc(user.uid)
-      .snapshots()
-      .map(
-        (snapshot) => snapshot.exists
-            ? PharmacieModel.fromMap(snapshot.data()!, snapshot.id)
-            : null,
-      );
+      .snapshots(includeMetadataChanges: true)
+      .map((snapshot) {
+        if (!snapshot.exists) return null;
+        if (!snapshot.metadata.isFromCache &&
+            !snapshot.metadata.hasPendingWrites) {
+          unawaited(
+            ClientDirectoryService(
+              ref.read(firestoreProvider),
+            ).refresh(user.uid).catchError((Object error) {
+              debugPrint(
+                'Annuaire client non actualisé : ${error.runtimeType}',
+              );
+            }),
+          );
+        }
+        return PharmacieModel.fromMap(snapshot.data()!, snapshot.id);
+      });
 });
 
 final pharmacieAuthorizedProvider = Provider<bool>((ref) {
@@ -38,8 +52,15 @@ final pharmacieAuthorizedProvider = Provider<bool>((ref) {
   final profile = ref.watch(currentPharmacieProvider);
   return user != null &&
       !profile.hasError &&
-      profile.valueOrNull?.id == user.uid;
+      profile.valueOrNull?.id == user.uid &&
+      profile.valueOrNull?.canReadData == true;
 });
+
+final pharmacieWritableProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(pharmacieAuthorizedProvider) &&
+      ref.watch(currentPharmacieProvider).valueOrNull?.canWriteData == true,
+);
 
 final wholesaleEnabledProvider = Provider<bool>(
   (ref) =>
@@ -121,6 +142,7 @@ class AuthService {
       pays: pays.trim(),
       proprietaireNom: proprietaireNom.trim(),
       createdAt: DateTime.now(),
+      accessStatus: 'pending',
     );
     final reference = _firestore.collection('pharmacies').doc(user.uid);
     await _firestore.runTransaction((transaction) async {
@@ -131,10 +153,15 @@ class AuthService {
         );
       if (_auth.currentUser?.uid != user.uid)
         throw StateError('La session a changé.');
-      transaction.set(reference, {
+      final data = {
         ...profile.toMap(),
         'created_at': FieldValue.serverTimestamp(),
-      });
+      };
+      transaction.set(reference, data);
+      transaction.set(
+        _firestore.doc('clients/${user.uid}'),
+        ClientDirectoryService.initial(data),
+      );
     });
     await NotificationService.updateTokenForPharmacie(user.uid);
     return profile;

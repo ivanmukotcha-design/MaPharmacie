@@ -1,0 +1,13 @@
+{
+  "name": "pharmaflow-admin-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../test/admin_dashboard_test.mjs",
+    "test:browser": "playwright test",
+    "serve": "node serve.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

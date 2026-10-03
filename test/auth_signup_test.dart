@@ -96,6 +96,13 @@ void main() {
       expect(profile['code'], 'PHR-nouvelle-pharmacie');
       expect(profile['tarifs_gros_actifs'], isFalse);
       expect(profile['created_at'], isA<Timestamp>());
+      expect(profile['access_status'], 'pending');
+      final directory =
+          (await firestore.doc('clients/nouvelle-pharmacie').get()).data()!;
+      expect(directory['access_status'], 'pending');
+      expect(directory['access_revision'], 0);
+      expect(directory['email'], profile['email']);
+      expect(directory.containsKey('fcm_tokens'), isFalse);
     },
   );
 

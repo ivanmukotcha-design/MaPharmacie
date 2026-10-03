@@ -670,7 +670,7 @@ final syncServiceProvider = Provider<SyncService>((ref) {
         ref.read(pharmacieAuthorizedProvider) &&
         ref.read(currentPharmacieProvider).valueOrNull?.id == userId,
     canWrite: () =>
-        ref.read(pharmacieAuthorizedProvider) &&
+        ref.read(pharmacieWritableProvider) &&
         ref.read(currentPharmacieProvider).valueOrNull?.id == userId,
   );
   service.init();

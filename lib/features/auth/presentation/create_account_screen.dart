@@ -79,7 +79,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             const Text(
-              'Créez un seul compte pour votre pharmacie. Ses autres utilisateurs et appareils se connecteront avec ces mêmes identifiants.',
+              'Créez un seul compte pour votre pharmacie. Son activation sera effectuée par votre fournisseur après la vente. Vos autres utilisateurs et appareils utiliseront ensuite les mêmes identifiants.',
             ),
             const SizedBox(height: 24),
             PfTextField(

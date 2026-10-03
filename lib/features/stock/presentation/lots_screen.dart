@@ -335,6 +335,7 @@ class _StockEntryDialogState extends State<_StockEntryDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: Text(
       _adjustment ? 'Corriger ${widget.lot!.numero}' : 'Réceptionner un lot',
     ),
@@ -354,6 +355,7 @@ class _StockEntryDialogState extends State<_StockEntryDialog> {
             ),
           if (!_adjustment)
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _unit,
               decoration: const InputDecoration(
                 labelText: 'Unité réceptionnée',

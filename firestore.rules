@@ -8,10 +8,76 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == pharmacieId;
     }
     function canRead(pharmacieId) {
-      return isOwner(pharmacieId) && exists(/databases/$(database)/documents/pharmacies/$(pharmacieId));
+      return isOwner(pharmacieId) && exists(/databases/$(database)/documents/pharmacies/$(pharmacieId))
+        && get(/databases/$(database)/documents/pharmacies/$(pharmacieId)).data.get('access_status', 'active') in ['active', 'suspended'];
     }
     function canWrite(pharmacieId) {
-      return canRead(pharmacieId);
+      return canRead(pharmacieId)
+        && get(/databases/$(database)/documents/pharmacies/$(pharmacieId)).data.get('access_status', 'active') == 'active';
+    }
+    function isAccountAdmin() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/account_admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/account_admins/$(request.auth.uid)).data.enabled == true;
+    }
+    function contactMatchesProfile(clientId) {
+      let profile = getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data;
+      let data = request.resource.data;
+      return data.nom == profile.get('nom', '') && data.email == profile.get('email', '')
+        && data.telephone == profile.get('telephone', '') && data.adresse == profile.get('adresse', '')
+        && data.ville == profile.get('ville', '') && data.pays == profile.get('pays', '')
+        && data.proprietaire_nom == profile.get('proprietaire_nom', '') && data.created_at == profile.created_at;
+    }
+    function validAccessChange(clientId) {
+      let old = resource.data;
+      let data = request.resource.data;
+      let profile = getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data;
+      let event = getAfter(/databases/$(database)/documents/account_events/$(data.last_access_event)).data;
+      return data.diff(old).affectedKeys().hasOnly(['access_status', 'access_revision', 'last_access_event', 'activated_at', 'access_updated_at'])
+        && ((old.access_status in ['pending', 'suspended'] && data.access_status == 'active')
+          || (old.access_status == 'active' && data.access_status == 'suspended'))
+        && data.access_revision == old.access_revision + 1
+        && data.access_updated_at == request.time
+        && data.activated_at == (old.activated_at == null && data.access_status == 'active' ? request.time : old.activated_at)
+        && profile.access_status == data.access_status && profile.access_revision == data.access_revision
+        && profile.last_access_event == data.last_access_event && profile.activated_at == data.activated_at
+        && profile.access_updated_at == request.time
+        && event.client_id == clientId && event.actor_uid == request.auth.uid
+        && event.from_status == old.access_status && event.to_status == data.access_status
+        && event.revision == data.access_revision && event.created_at == request.time;
+    }
+    match /account_admins/{adminId} {
+      allow get: if isOwner(adminId);
+      allow list, write: if false;
+    }
+    match /clients/{clientId} {
+      allow get: if isOwner(clientId) || isAccountAdmin();
+      allow list: if isAccountAdmin() && request.query.limit != null && request.query.limit <= 200;
+      allow create: if isOwner(clientId) && contactMatchesProfile(clientId)
+        && request.resource.data.keys().hasOnly(['nom', 'email', 'telephone', 'adresse', 'ville', 'pays', 'proprietaire_nom',
+          'created_at', 'access_status', 'access_revision', 'last_access_event', 'activated_at'])
+        && request.resource.data.access_status == getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data.get('access_status', 'active')
+        && request.resource.data.access_revision == getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data.get('access_revision', 0)
+        && request.resource.data.last_access_event == getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data.get('last_access_event', '')
+        && request.resource.data.activated_at == getAfter(/databases/$(database)/documents/pharmacies/$(clientId)).data.get('activated_at', null);
+      allow update: if (isOwner(clientId) && contactMatchesProfile(clientId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nom', 'email', 'telephone', 'adresse', 'ville', 'pays', 'proprietaire_nom']))
+        || (isAccountAdmin() && validAccessChange(clientId));
+      allow delete: if false;
+    }
+    match /account_events/{eventId} {
+      allow get: if isAccountAdmin();
+      allow list: if isAccountAdmin() && request.query.limit != null && request.query.limit <= 100;
+      allow create: if isAccountAdmin()
+        && request.resource.data.keys().hasOnly(['client_id', 'actor_uid', 'from_status', 'to_status', 'reason', 'created_at', 'revision'])
+        && request.resource.data.actor_uid == request.auth.uid
+        && request.resource.data.reason is string && request.resource.data.reason.size() >= 5 && request.resource.data.reason.size() <= 500
+        && request.resource.data.created_at == request.time
+        && request.resource.data.from_status == get(/databases/$(database)/documents/clients/$(request.resource.data.client_id)).data.access_status
+        && request.resource.data.revision == get(/databases/$(database)/documents/clients/$(request.resource.data.client_id)).data.access_revision + 1
+        && getAfter(/databases/$(database)/documents/clients/$(request.resource.data.client_id)).data.last_access_event == eventId
+        && getAfter(/databases/$(database)/documents/clients/$(request.resource.data.client_id)).data.access_status == request.resource.data.to_status;
+      allow update, delete: if false;
     }
     function validTenant(pharmacieId) {
       return request.resource.data.pharmacie_id == pharmacieId;
@@ -62,17 +128,27 @@ service cloud.firestore {
       allow list: if false;
       allow create: if isOwner(pharmacieId)
         && request.resource.data.keys().hasOnly(['code', 'nom', 'username', 'email', 'telephone',
-          'adresse', 'ville', 'pays', 'tarifs_gros_actifs', 'proprietaire_nom', 'created_at'])
+          'adresse', 'ville', 'pays', 'tarifs_gros_actifs', 'proprietaire_nom', 'created_at', 'access_status'])
+        && request.resource.data.access_status == 'pending'
         && request.resource.data.tarifs_gros_actifs == false
         && request.resource.data.code == 'PHR-' + pharmacieId
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.nom is string && request.resource.data.nom.size() > 0
         && request.resource.data.created_at == request.time;
-      allow update: if isOwner(pharmacieId)
+      allow update: if (isOwner(pharmacieId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'nom', 'username', 'telephone', 'adresse', 'ville', 'pays', 'proprietaire_nom',
           'fcm_tokens', 'last_token_update', 'tarifs_gros_actifs'])
-        && request.resource.data.get('tarifs_gros_actifs', false) is bool;
+        && request.resource.data.get('tarifs_gros_actifs', false) is bool
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['tarifs_gros_actifs']) || canWrite(pharmacieId)))
+        || (isAccountAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['access_status', 'access_revision', 'last_access_event', 'activated_at', 'access_updated_at'])
+          && request.resource.data.access_status == getAfter(/databases/$(database)/documents/clients/$(pharmacieId)).data.access_status
+          && request.resource.data.access_revision == resource.data.get('access_revision', 0) + 1
+          && request.resource.data.access_revision == getAfter(/databases/$(database)/documents/clients/$(pharmacieId)).data.access_revision
+          && request.resource.data.last_access_event == getAfter(/databases/$(database)/documents/clients/$(pharmacieId)).data.last_access_event
+          && request.resource.data.activated_at == getAfter(/databases/$(database)/documents/clients/$(pharmacieId)).data.activated_at
+          && request.resource.data.access_updated_at == request.time);
       allow delete: if false;
 
       match /medicaments/{medicamentId} {

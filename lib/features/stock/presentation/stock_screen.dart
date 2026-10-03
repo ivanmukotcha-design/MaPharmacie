@@ -8,6 +8,7 @@ import '../../../shared/widgets/pf_search_bar.dart';
 import '../../../shared/widgets/pf_badge.dart';
 import '../../../shared/widgets/barcode_scanner_screen.dart';
 import '../../../models/models.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 // Filtres stock
 enum FiltreStock { tous, faible, rupture, expires, expireBientot }
@@ -68,45 +69,54 @@ class StockScreen extends ConsumerWidget {
                 style: AppTextStyles.label.copyWith(color: Colors.white),
               ),
             ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              children: [
-                PfSearchBar(
-                  value: ref.watch(searchStockProvider),
-                  hint: 'Rechercher un médicament, code-barres...',
-                  onChanged: (v) =>
-                      ref.read(searchStockProvider.notifier).state = v,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                _buildFiltres(ref, filtreActif),
-              ],
+      body: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                children: [
+                  PfSearchBar(
+                    value: ref.watch(searchStockProvider),
+                    hint: 'Rechercher un médicament, code-barres...',
+                    onChanged: (v) =>
+                        ref.read(searchStockProvider.notifier).state = v,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildFiltres(ref, filtreActif),
+                ],
+              ),
             ),
           ),
-          Expanded(
-            child: medsAsync.when(
-              loading: () => _buildLoading(),
-              error: (e, _) =>
-                  Center(child: Text('Erreur: $e', style: AppTextStyles.body)),
-              data: (meds) {
-                final filteredMeds = _filtrerMeds(meds, filtreActif);
-                if (filteredMeds.isEmpty) return _buildEmpty(filtreActif);
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    0,
-                    AppSpacing.md,
-                    100,
-                  ),
-                  itemCount: filteredMeds.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (_, i) => _MedicamentCard(med: filteredMeds[i]),
-                );
-              },
+          medsAsync.when(
+            loading: () => SliverFillRemaining(child: _buildLoading()),
+            error: (e, _) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Erreur: $e', style: AppTextStyles.body),
+              ),
             ),
+            data: (meds) {
+              final filteredMeds = _filtrerMeds(meds, filtreActif);
+              if (filteredMeds.isEmpty)
+                return SliverToBoxAdapter(child: _buildEmpty(filtreActif));
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  100,
+                ),
+                sliver: SliverList.builder(
+                  itemCount: filteredMeds.length,
+                  itemBuilder: (_, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _MedicamentCard(med: filteredMeds[index]),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -122,11 +132,10 @@ class StockScreen extends ConsumerWidget {
       (FiltreStock.expireBientot, 'Expire bientôt', AppColors.warning),
     ];
 
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 4),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
         children: filtres.map((f) {
           final selected = actif == f.$1;
           return Padding(
@@ -222,7 +231,7 @@ class StockScreen extends ConsumerWidget {
       ),
     };
     final (titre, msg) = msgs[filtre]!;
-    return Center(
+    return ScrollableEmptyState(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
@@ -335,22 +344,16 @@ class _MedicamentCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          med['nom'] ?? '',
-                          style: AppTextStyles.label.copyWith(
-                            color: AppColors.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      PfBadge(label: statutLabel, color: indicateur),
-                    ],
+                  Text(
+                    med['nom'] ?? '',
+                    style: AppTextStyles.label.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 4),
+                  PfBadge(label: statutLabel, color: indicateur),
                   const SizedBox(height: 4),
                   Text(
                     med['categorie'] ?? '',
@@ -383,27 +386,21 @@ class _MedicamentCard extends StatelessWidget {
                       'Vendable : ${medicine.unitesVendables.affichage}',
                       style: AppTextStyles.small,
                     ),
+                  Text(
+                    '${(med['prix_detail'] as num).toStringAsFixed(0)} FC',
+                    style: AppTextStyles.label.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${(med['prix_detail'] as num).toStringAsFixed(0)} FC',
-                  style: AppTextStyles.label.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Icon(
-                  Icons.chevron_right,
-                  color: AppColors.textMuted,
-                  size: 18,
-                ),
-              ],
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.textMuted,
+              size: 18,
             ),
           ],
         ),

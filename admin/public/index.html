@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light">
+  <title>PharmaFlow — Administration</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="boot.mjs"></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand">PharmaFlow <span>Administration</span></div><button id="logout" class="secondary" hidden>Se déconnecter</button></header>
+  <main>
+    <p id="message" role="status" aria-live="polite">Chargement de l’espace sécurisé…</p>
+    <section id="login" class="login panel" hidden aria-labelledby="login-title">
+      <p class="eyebrow">Espace réservé</p><h1 id="login-title">Gérer les accès clients</h1>
+      <p>Activez les pharmacies après la vente et suivez vos interventions. Les stocks et les ventes ne sont pas accessibles ici.</p>
+      <form id="login-form">
+        <label>Email administrateur<input id="email" type="email" autocomplete="username" required maxlength="254"></label>
+        <label>Mot de passe<input id="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Se connecter</button>
+      </form>
+      <button id="reset-password" class="text-button">Mot de passe oublié ?</button>
+      <p class="muted">Aucune inscription administrateur publique. Les droits sont attribués séparément dans Firebase.</p>
+    </section>
+    <section id="workspace" hidden aria-labelledby="workspace-title">
+      <div class="heading"><div><p class="eyebrow">Gestion des comptes</p><h1 id="workspace-title">Vos pharmacies clientes</h1><p id="signed-in" class="muted"></p></div><button id="refresh" class="secondary">Actualiser</button></div>
+      <div id="stats" class="stats" aria-label="Récapitulatif des fiches chargées"></div>
+      <p id="coverage" class="muted"></p>
+      <section class="panel">
+        <div class="filters"><label>Rechercher dans les fiches chargées<input id="search" type="search" placeholder="Nom, responsable, email, téléphone, ville…"></label><label>Statut<select id="status"><option value="all">Tous les comptes</option><option value="pending">En attente</option><option value="active">Actifs</option><option value="suspended">Suspendus</option></select></label></div>
+        <p id="results" class="muted" aria-live="polite"></p>
+        <div id="clients" class="clients"></div>
+        <button id="load-more" class="secondary" hidden>Charger les 100 fiches suivantes</button>
+      </section>
+      <p class="privacy">Cet espace contient uniquement les coordonnées et les décisions d’accès. Une suspension ne supprime aucune donnée. Un appareil hors connexion recevra le nouveau statut à sa reconnexion.</p>
+    </section>
+  </main>
+  <dialog id="detail" aria-labelledby="detail-title">
+    <div class="dialog-heading"><h2 id="detail-title">Fiche client</h2><button id="close-detail" class="secondary">Fermer</button></div>
+    <div id="detail-content"></div>
+    <h3>Intervenir sur ce compte</h3>
+    <form id="action-form">
+      <label>Décision<select id="decision" required></select></label>
+      <label>Motif ou référence de vente<textarea id="reason" rows="3" minlength="5" maxlength="500" required placeholder="Expliquez la décision, sans information médicale ni mot de passe."></textarea></label>
+      <label class="check"><input id="confirmation" type="checkbox" required><span id="confirmation-label">Je confirme cette intervention.</span></label>
+      <button id="apply" type="submit">Confirmer la décision</button>
+    </form>
+    <p id="detail-message" role="status" aria-live="polite"></p>
+    <h3>Historique des interventions</h3><p class="muted">30 interventions les plus récentes. Historique non modifiable.</p><ol id="history"></ol>
+  </dialog>
+  <noscript>Activez JavaScript pour utiliser cet espace administrateur.</noscript>
+</body>
+</html>

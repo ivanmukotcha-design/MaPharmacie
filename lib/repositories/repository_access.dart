@@ -10,17 +10,24 @@ class RepositoryAccess {
 
   RepositoryAccess(this.check);
 
-  factory RepositoryAccess.forRef(Ref ref) =>
-      RepositoryAccess((pharmacieId, write) {
-        final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
-        final user = ref.read(currentUserProvider);
-        if (user?.uid != pharmacieId ||
-            pharmacie?.id != pharmacieId ||
-            pharmacie == null ||
-            !ref.read(pharmacieAuthorizedProvider)) {
-          throw StateError('Accès refusé pour cette pharmacie.');
-        }
-      });
+  factory RepositoryAccess.forRef(Ref ref) => RepositoryAccess((
+    pharmacieId,
+    write,
+  ) {
+    final pharmacie = ref.read(currentPharmacieProvider).valueOrNull;
+    final user = ref.read(currentUserProvider);
+    if (user?.uid != pharmacieId ||
+        pharmacie?.id != pharmacieId ||
+        pharmacie == null ||
+        !ref.read(pharmacieAuthorizedProvider)) {
+      throw StateError('Accès refusé pour cette pharmacie.');
+    }
+    if (write && !ref.read(pharmacieWritableProvider)) {
+      throw StateError(
+        'Compte suspendu : les modifications sont désactivées. Vos données restent conservées.',
+      );
+    }
+  });
 
   void read(String pharmacieId) => check(pharmacieId, false);
   void write(String pharmacieId) => check(pharmacieId, true);

@@ -204,7 +204,9 @@ class _BackupScreenState extends ConsumerState<BackupScreen> {
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: _busy ? null : () => _run(_restore),
+          onPressed: _busy || !ref.watch(pharmacieWritableProvider)
+              ? null
+              : () => _run(_restore),
           icon: const Icon(Icons.restore),
           label: const Text('Restaurer une sauvegarde'),
         ),
@@ -244,6 +246,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: Text(
       widget.create ? 'Protéger la sauvegarde' : 'Ouvrir la sauvegarde',
     ),

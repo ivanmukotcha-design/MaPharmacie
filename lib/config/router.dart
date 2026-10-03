@@ -20,6 +20,7 @@ import '../features/settings/settings_screen.dart';
 import '../features/settings/sync_screen.dart';
 import '../features/settings/backup_screen.dart';
 import '../shared/widgets/main_scaffold.dart';
+import '../shared/widgets/responsive_layout.dart';
 import 'auth_provider.dart';
 import 'access_policy.dart';
 import '../features/auth/presentation/access_screen.dart';
@@ -45,15 +46,36 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 600, child: LoginScreen()),
+      ),
       GoRoute(
         path: '/register',
-        builder: (_, __) => const CreateAccountScreen(),
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 600, child: CreateAccountScreen()),
       ),
-      GoRoute(path: '/configurer', builder: (_, __) => const RegisterScreen()),
-      GoRoute(path: '/acces', builder: (_, __) => const AccessScreen()),
-      GoRoute(path: '/synchronisation', builder: (_, __) => const SyncScreen()),
-      GoRoute(path: '/sauvegardes', builder: (_, __) => const BackupScreen()),
+      GoRoute(
+        path: '/configurer',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 720, child: RegisterScreen()),
+      ),
+      GoRoute(
+        path: '/acces',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 720, child: AccessScreen()),
+      ),
+      GoRoute(
+        path: '/synchronisation',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 900, child: SyncScreen()),
+      ),
+      GoRoute(
+        path: '/sauvegardes',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 720, child: BackupScreen()),
+      ),
       // Main app - Shell avec bottom nav
       ShellRoute(
         builder: (context, state, child) => MainScaffold(child: child),
@@ -84,21 +106,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Médicament detail / form (full screen, no bottom nav)
       GoRoute(
         path: '/medicament/nouveau',
-        builder: (_, __) => const MedicamentFormScreen(),
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 800, child: MedicamentFormScreen()),
       ),
       GoRoute(
         path: '/medicament/:id',
-        builder: (_, state) =>
-            MedicamentDetailScreen(id: state.pathParameters['id']!),
+        builder: (_, state) => ResponsivePage(
+          maxWidth: 900,
+          child: MedicamentDetailScreen(id: state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/medicament/:id/modifier',
-        builder: (_, state) =>
-            MedicamentFormScreen(medicamentId: state.pathParameters['id']),
+        builder: (_, state) => ResponsivePage(
+          maxWidth: 800,
+          child: MedicamentFormScreen(medicamentId: state.pathParameters['id']),
+        ),
       ),
       GoRoute(
         path: '/medicament/:id/lots',
-        builder: (_, state) => LotsScreen(id: state.pathParameters['id']!),
+        builder: (_, state) => ResponsivePage(
+          maxWidth: 900,
+          child: LotsScreen(id: state.pathParameters['id']!),
+        ),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

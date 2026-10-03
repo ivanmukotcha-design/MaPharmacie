@@ -12,8 +12,9 @@ ne crée pas de projet Firebase et n’exige aucun compte préparé par un techn
 
 - **Créer un compte** : email, mot de passe et confirmation, puis formulaire de
   la pharmacie. Connexion et récupération de mot de passe disponibles.
-- Pas d’invitation, de validation manuelle, de connexion Google, d’abonnement, de
-  paiement ou de super-administrateur. Le compte est commun aux appareils de la pharmacie.
+- Activation commerciale des nouveaux comptes après la vente, depuis un espace
+  administrateur séparé. Pas d’abonnement ni de paiement en ligne. Le compte reste
+  commun aux appareils de la pharmacie. Guide : `admin/README.md`.
 - Au premier accès du compte autorisé : formulaire des informations de la pharmacie.
   Les appareils suivants retrouvent le même profil ; aucun choix grossiste/détaillant.
 - Stock : création, modification, archivage, fournisseurs, code-barres par caméra,
@@ -46,9 +47,15 @@ ne crée pas de projet Firebase et n’exige aucun compte préparé par un techn
 | `lib/services` | Synchronisation, réglages communs, notifications et exports |
 | `lib/features` | Écrans Riverpod ; certains regroupés dans `screens_bundle.dart` |
 | `test` | Tests modèles, accès, panier, SQLite, synchronisation et règles Firebase |
+| `admin/public` | Tableau de bord web statique pour les coordonnées et activations |
 
 Firestore :
-- `pharmacies/{uid}` : profil et réglage booléen `tarifs_gros_actifs`.
+- `pharmacies/{uid}` : profil, réglage booléen `tarifs_gros_actifs` et `access_status`.
+- `clients/{uid}` : annuaire minimal, sans stocks, ventes ni jetons FCM ; coordonnées
+  et statut accessibles à l’administrateur. Les nouveaux comptes sont `pending`.
+- `account_admins/{uid}` : autorisation administrateur attribuée uniquement depuis
+  un environnement privilégié, jamais par le navigateur ou l’application.
+- `account_events/{id}` : historique immuable des décisions d’accès, réservé aux administrateurs.
 - Sous-collections : `medicaments`, `fournisseurs`, `ventes`, `activites`,
   `notifications`. Aucun client ne peut accéder aux données d’un autre UID.
 
@@ -60,6 +67,29 @@ connecté. Créer un compte ne donne jamais accès à une pharmacie existante.
 `config/installation` n’est plus requis ni consulté. Les anciennes collections
 `config`, `admins`, `paiements` et `abonnements` n’accordent plus aucun droit et
 sont inaccessibles depuis les nouvelles règles.
+
+## Java pour les compilations Android
+
+Ce projet utilise Gradle 8.14. Utiliser un JDK 21 pour lancer Flutter et Gradle,
+pas le JDK 25 fourni avec certaines installations récentes d'Android Studio.
+Une erreur `What went wrong: 25.0.3` peut provenir de ce choix de JDK ; ajouter
+`--enable-native-access=ALL-UNNAMED` ne corrige pas cette incompatibilité.
+
+Sur le poste Windows actuel :
+
+```powershell
+flutter config --jdk-dir="C:/Program Files/Eclipse Adoptium/jdk-21.0.11.10-hotspot"
+flutter analyze --suggestions --no-pub
+```
+
+Adapter le chemin au JDK 21 installé sur un autre poste. Ce réglage persiste
+localement pour tous les projets Flutter ; redémarrer l'éditeur après modification.
+Pour lancer Gradle directement, choisir aussi JDK 21 dans les paramètres Gradle
+de l'IDE ou dans `JAVA_HOME`. Le réglage Flutter seul ne change pas le Java du
+terminal ni celui des tâches Gradle lancées directement par Android Studio.
+
+Références : [compatibilité Gradle/Java](https://docs.gradle.org/current/userguide/compatibility.html)
+et [choix du JDK pour Flutter](https://docs.flutter.dev/release/breaking-changes/android-java-gradle-migration-guide).
 
 ## Mise en service d’une pharmacie
 
@@ -84,7 +114,8 @@ Ces étapes sont manuelles et ne sont **pas exécutées par les modifications du
    **Cette commande modifie le serveur.** Ne pas laisser une base en mode test.
    Un fichier de règles local ne protège pas la base tant qu’il n’est pas déployé.
 6. Le responsable ouvre **Créer un compte**, choisit son email et son mot de passe,
-   puis complète les informations de sa pharmacie. Les autres utilisateurs ouvrent
+   puis complète les informations de sa pharmacie. Il attend l’activation après
+   la vente, depuis le tableau de bord administrateur. Les autres utilisateurs ouvrent
    **Se connecter** avec ces mêmes identifiants, sans créer un nouveau compte.
    La première inscription exige Internet. Si la création du profil échoue après
    celle du compte Auth, se reconnecter permet de reprendre le formulaire : ne pas
@@ -117,6 +148,18 @@ La release Android exige `android/key.properties`, d’après
 Ne pas commiter les mots de passe ou les keystores. Sur Apple, finaliser les
 fichiers Firebase, la signature, APNs et les capacités requises. Les permissions
 caméra et notifications nécessitent une recette sur appareil réel.
+
+Pour un APK Android plus léger, utiliser `flutter build apk --release --split-per-abi`.
+Les fichiers sont générés dans `build/app/outputs/flutter-apk/` : `app-arm64-v8a-release.apk`
+pour les appareils ARM 64 bits, `app-armeabi-v7a-release.apk` pour ARM 32 bits et
+`app-x86_64-release.apk` pour x86-64. Installer uniquement celui adapté à l’appareil.
+La configuration locale peut utiliser `android/pharmaflow-release.jks` avec
+`android/key.properties` : conserver une copie sécurisée de ces deux fichiers privés,
+exclus de Git. La même clé sera nécessaire pour signer les prochaines mises à jour.
+Une release signée avec cette clé ne remplace pas directement une application signée
+avec la clé debug. Avant toute désinstallation, synchroniser et exporter une sauvegarde
+hors du téléphone ; désinstaller efface les données locales. Le build ne publie rien
+sur Firebase ni sur Google Play.
 
 ## Migration
 
@@ -299,6 +342,30 @@ compatibles. Il refuse tout hôte autre que les émulateurs locaux `127.0.0.1`.
 Les tests Flutter de synchronisation utilisent un Firestore simulé. Ces tests ne
 remplacent pas une recette réelle sur deux appareils (connexion, caméra, coupure
 réseau, ventes concurrentes, notifications et partage).
+
+## Interfaces adaptatives
+
+- Portrait et paysage suivent les réglages de l'appareil. Les pages tiennent compte
+  des zones réservées au système et le clavier ne doit pas masquer les formulaires.
+- Sur grand écran (largeur ≥ 1000 et hauteur ≥ 500 pixels logiques), la navigation
+  devient latérale et défilable. Sur téléphone, elle reste en bas et se masque
+  lorsque le clavier est ouvert.
+- Le contenu est centré, limité à 1200 pixels logiques (600 à 900 pour les formulaires
+  et fiches). Les grilles et groupes de champs passent en colonnes selon l'espace
+  disponible et la taille du texte choisie dans les réglages d'accessibilité.
+- Les tests `test/responsive_screens_test.dart` parcourent les écrans, listes et
+  formulaires sur petits téléphones, tablettes, grandes fenêtres et en paysage,
+  avec texte jusqu'à 200 % et clavier simulé. `test/back_navigation_test.dart`
+  vérifie aussi le changement de navigation lors d'un redimensionnement.
+
+```sh
+flutter test --no-pub test/responsive_screens_test.dart test/back_navigation_test.dart
+```
+
+Compléter ces tests par une recette sur téléphone et tablette réels : rotation,
+clavier, agrandissement du texte, encoche, navigation gestuelle, caméra, sélecteurs
+de fichiers et partage. Les tests de mise en page ne garantissent pas le comportement
+des interfaces natives sur tous les modèles d'appareils.
 
 ## Limites restantes
 

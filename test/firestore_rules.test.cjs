@@ -51,6 +51,109 @@ async function denied(responsePromise) {
   assert.equal(response.status, 403, await response.text());
 }
 
+function decodeValue(entry) {
+  if ('nullValue' in entry) return null;
+  if ('stringValue' in entry) return entry.stringValue;
+  if ('integerValue' in entry) return Number(entry.integerValue);
+  if ('timestampValue' in entry) return new Date(entry.timestampValue);
+  if ('booleanValue' in entry) return entry.booleanValue;
+  throw new Error('Unsupported test value');
+}
+
+async function changeAccess(clientId, actor, target, options = {}) {
+  const response = await read(`clients/${clientId}`, actor.token);
+  assert.equal(response.status, 200);
+  const current = Object.fromEntries(Object.entries((await response.json()).fields).map(([key, entry]) => [key, decodeValue(entry)]));
+  const eventId = `event-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const update = { access_status: target, access_revision: current.access_revision + 1,
+    last_access_event: eventId, activated_at: current.activated_at };
+  const transforms = [{ fieldPath: 'access_updated_at', setToServerValue: 'REQUEST_TIME' }];
+  if (target === 'active' && current.activated_at === null) transforms.push({ fieldPath: 'activated_at', setToServerValue: 'REQUEST_TIME' });
+  const writes = [{ update: { name: `${database}/clients/${clientId}`, fields: fields({ ...current, ...update }) }, updateTransforms: transforms }];
+  if (options.profile !== false) writes.push({
+    update: { name: `${database}/pharmacies/${clientId}`, fields: fields(update) },
+    updateMask: { fieldPaths: Object.keys(update) }, updateTransforms: transforms,
+  });
+  if (options.audit !== false) writes.push({ update: { name: `${database}/account_events/${eventId}`, fields: fields({
+    client_id: clientId, actor_uid: options.actor || actor.uid, from_status: current.access_status,
+    to_status: target, reason: options.reason ?? 'Vente vérifiée par administrateur', revision: update.access_revision,
+  }) }, updateTransforms: [{ fieldPath: 'created_at', setToServerValue: 'REQUEST_TIME' }] });
+  return fetch(`${endpoint}:commit`, { method: 'POST', headers: {
+    'Content-Type': 'application/json', Authorization: `Bearer ${actor.token}`,
+  }, body: JSON.stringify({ writes }) });
+}
+
+test('Activation commerciale : séparation des rôles et historique atomique', async (suite) => {
+  const client = await account('activation-client');
+  const operator = await account('activation-admin');
+  const stranger = await account('activation-stranger');
+  const path = `pharmacies/${client.uid}`;
+  const contact = { nom: 'Pharmacie à activer', email: client.email, telephone: '123', adresse: 'Rue',
+    ville: 'Ville', pays: 'Pays', proprietaire_nom: 'Responsable' };
+  const profile = { ...contact, code: `PHR-${client.uid}`, username: '', tarifs_gros_actifs: false, access_status: 'pending' };
+  await allowed(write(`account_admins/${operator.uid}`, { enabled: true }, 'owner'));
+  await suite.test('Aucun utilisateur ne peut s’attribuer un rôle ou activer son propre compte', async () => {
+    await denied(write(`account_admins/${client.uid}`, { enabled: true }, client.token));
+    await denied(write(`account_admins/${stranger.uid}`, { enabled: true }, operator.token));
+    await denied(write(path, { ...profile, access_status: 'active' }, client.token, ['created_at']));
+    const { access_status, ...oldClient } = profile;
+    await denied(write(path, oldClient, client.token, ['created_at']));
+    await allowed(write(path, profile, client.token, ['created_at']));
+  });
+  const snapshot = await (await read(path, client.token)).json();
+  const created = new Date(snapshot.fields.created_at.timestampValue);
+  const directory = { ...contact, created_at: created, access_status: 'pending', access_revision: 0, last_access_event: '', activated_at: null };
+  const medicinePath = `${path}/medicaments/existing`;
+  const medicine = { pharmacie_id: client.uid, nom: 'Stock privé', prix_detail: 10, prix_grossiste: null, prix_achat: 5,
+    unite_prix: 'boite', seuil_alerte: 1, est_actif: true, revision: 1,
+    unites: { cartons: 0, boites: 10, plaquettes: 0, comprimes: 0, flacons: 0, cartons_par_boite: 20, boites_par_plaquette: 10, plaquettes_par_comprime: 10 } };
+  await allowed(write(medicinePath, medicine, 'owner'));
+  await suite.test('Annuaire limité aux coordonnées vérifiées et compte en attente bloqué', async () => {
+    await denied(write(`clients/${client.uid}`, { ...directory, access_status: 'active' }, client.token));
+    await denied(write(`clients/${client.uid}`, { ...directory, nom: 'Fausse fiche' }, client.token));
+    await denied(write(`clients/${client.uid}`, { ...directory, ventes: [] }, client.token));
+    await allowed(write(`clients/${client.uid}`, directory, client.token));
+    await denied(read(medicinePath, client.token));
+    await denied(write(`${path}/medicaments/new`, medicine, client.token));
+    await allowed(read(`clients/${client.uid}`, operator.token));
+    await denied(read(`clients/${client.uid}`, stranger.token));
+    await denied(read(path, operator.token));
+    await denied(read(medicinePath, operator.token));
+    await denied(write(`${path}/medicaments/new`, medicine, operator.token));
+    await denied(write(`clients/${client.uid}`, { ...directory, access_status: 'active' }, client.token));
+  });
+  await suite.test('Activation exige une transaction complète et un motif horodaté', async () => {
+    await denied(changeAccess(client.uid, operator, 'active', { audit: false }));
+    await denied(changeAccess(client.uid, operator, 'active', { profile: false }));
+    await denied(changeAccess(client.uid, operator, 'active', { reason: 'x' }));
+    await denied(changeAccess(client.uid, operator, 'active', { actor: stranger.uid }));
+    await allowed(changeAccess(client.uid, operator, 'active'));
+    await allowed(read(medicinePath, client.token));
+    await allowed(write(`${path}/medicaments/new`, medicine, client.token));
+    await denied(changeAccess(client.uid, operator, 'active'));
+    const current = await (await read(`clients/${client.uid}`, operator.token)).json();
+    const eventPath = `account_events/${current.fields.last_access_event.stringValue}`;
+    await allowed(read(eventPath, operator.token));
+    await denied(read(eventPath, client.token));
+    await denied(write(eventPath, { reason: 'Historique réécrit' }, operator.token));
+    await denied(read(medicinePath, operator.token));
+  });
+  await suite.test('Suspension conserve la lecture et refuse toute nouvelle vente ou modification', async () => {
+    await allowed(changeAccess(client.uid, operator, 'suspended'));
+    await allowed(read(medicinePath, client.token));
+    await denied(write(medicinePath, { ...medicine, revision: 2 }, client.token));
+    await denied(write(`${path}/ventes/new`, { pharmacie_id: client.uid }, client.token));
+    await allowed(changeAccess(client.uid, operator, 'active'));
+    await allowed(write(medicinePath, { ...medicine, revision: 2 }, client.token));
+  });
+  await suite.test('Révocation administrateur immédiate côté serveur', async () => {
+    await allowed(write(`account_admins/${operator.uid}`, { enabled: false }, 'owner'));
+    await denied(read(`clients/${client.uid}`, operator.token));
+    await denied(write(path, { access_status: 'suspended' }, operator.token));
+    await allowed(read(medicinePath, client.token));
+  });
+});
+
 test('Inscription autonome, compte partagé et isolation Firestore', async (suite) => {
   const pharmacy = await account('pharmacy');
   const stranger = await account('stranger');
@@ -58,7 +161,7 @@ test('Inscription autonome, compte partagé et isolation Firestore', async (suit
   const path = `pharmacies/${pharmacy.uid}`;
   const profile = { code: `PHR-${pharmacy.uid}`, nom: 'Pharmacie test', username: '',
     email: pharmacy.email, telephone: '123', adresse: 'Adresse', ville: 'Ville', pays: 'Pays',
-    tarifs_gros_actifs: false, proprietaire_nom: 'Propriétaire' };
+    tarifs_gros_actifs: false, proprietaire_nom: 'Propriétaire', access_status: 'pending' };
   let currentProfile;
   await suite.test('Aucune configuration préalable ou invitation nécessaire', async () => {
     assert.equal((await read(path, pharmacy.token)).status, 404);
@@ -79,7 +182,7 @@ test('Inscription autonome, compte partagé et isolation Firestore', async (suit
       { ...profile, code: `PHR-${stranger.uid}`, email: stranger.email }, stranger.token, ['created_at']));
     await allowed(read(`pharmacies/${stranger.uid}`, stranger.token));
     await denied(read(`pharmacies/${stranger.uid}`, pharmacy.token));
-    currentProfile = { ...profile, created_at: new Date() };
+    currentProfile = { ...profile, access_status: 'active', created_at: new Date() };
     await allowed(write(path, currentProfile, 'owner'));
   });
   await allowed(write(`admins/${admin.uid}`, { role: 'superadmin' }, 'owner'));
@@ -122,6 +225,9 @@ test('Inscription autonome, compte partagé et isolation Firestore', async (suit
     await denied(read(medicinePath, stranger.token));
     await denied(read(medicinePath, admin.token));
     const otherMedicine = `pharmacies/${stranger.uid}/medicaments/med-1`;
+    await allowed(write(`pharmacies/${stranger.uid}`, {
+      ...profile, code: `PHR-${stranger.uid}`, email: stranger.email, access_status: 'active', created_at: new Date(),
+    }, 'owner'));
     await allowed(write(otherMedicine, { ...medicine, pharmacie_id: stranger.uid }, stranger.token));
     await denied(read(otherMedicine, pharmacy.token));
     await denied(write(`pharmacies/${admin.uid}/medicaments/med-1`, { ...medicine, pharmacie_id: admin.uid }, admin.token));

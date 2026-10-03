@@ -21,11 +21,7 @@ Future<void> main() async {
   // Initialisation de la localisation pour les dates
   await initializeDateFormatting('fr_FR', null);
 
-  // Fixation de l'orientation en portrait uniquement
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  await SystemChrome.setPreferredOrientations([]);
 
   // Initialisation de Firebase
   try {

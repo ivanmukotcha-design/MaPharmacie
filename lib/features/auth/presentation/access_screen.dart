@@ -9,9 +9,20 @@ class AccessScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentPharmacieProvider);
     final error = profile.hasError || ref.watch(authStateProvider).hasError;
+    final status = profile.valueOrNull?.accessStatus;
+    final pending = status == 'pending';
+    final suspended = status == 'suspended';
     return Scaffold(
       appBar: AppBar(
-        title: Text(error ? 'Vérification indisponible' : 'Accès indisponible'),
+        title: Text(
+          error
+              ? 'Vérification indisponible'
+              : pending
+              ? 'Activation en attente'
+              : suspended
+              ? 'Compte suspendu'
+              : 'Accès indisponible',
+        ),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -24,10 +35,21 @@ class AccessScreen extends ConsumerWidget {
               Text(
                 error
                     ? 'Vérifiez votre connexion. Le profil de votre pharmacie doit être accessible avant de continuer.'
-                    : 'Ce profil ne correspond pas au compte connecté. Reconnectez-vous avec les identifiants de votre pharmacie.',
+                    : pending
+                    ? 'Votre compte est en attente d’activation après la vente de l’application. Contactez votre fournisseur en indiquant l’email de votre compte. L’activation apparaîtra ici dès sa réception.'
+                    : suspended
+                    ? 'L’accès aux opérations est suspendu. Vos données ne sont pas supprimées. Vous pouvez créer une sauvegarde locale et contacter le support.'
+                    : 'Ce profil ne correspond pas au compte connecté ou son accès est indisponible. Contactez le support.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
+              if (pending || suspended)
+                Text(profile.valueOrNull!.email, textAlign: TextAlign.center),
+              if (suspended && !error)
+                TextButton(
+                  onPressed: () => context.push('/sauvegardes'),
+                  child: const Text('Sauvegarder mes données locales'),
+                ),
               ElevatedButton(
                 onPressed: () {
                   ref.invalidate(currentPharmacieProvider);

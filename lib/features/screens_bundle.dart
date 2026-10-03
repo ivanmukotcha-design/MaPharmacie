@@ -515,6 +515,7 @@ class SettingsScreen extends ConsumerWidget {
               () => showDialog<void>(
                 context: context,
                 builder: (dialog) => AlertDialog(
+                  scrollable: true,
                   title: const Text('Informations pharmacie'),
                   content: Text(
                     pharmacie == null

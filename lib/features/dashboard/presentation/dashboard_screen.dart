@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -103,50 +104,43 @@ class DashboardScreen extends ConsumerWidget {
     final greeting = _getGreeting();
     final now = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now());
 
-    return SliverAppBar(
-      expandedHeight: 140,
-      pinned: true,
-      elevation: 0,
-      backgroundColor: AppColors.primary,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.primary, AppColors.primaryDark],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+    return SliverToBoxAdapter(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.primary, AppColors.primaryDark],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        ),
+        padding: const EdgeInsets.all(20),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      '$greeting ',
-                      style: AppTextStyles.body.copyWith(color: Colors.white70),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text(
+                    '$greeting ',
+                    style: AppTextStyles.body.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    pharmacie?.nom ?? 'Ma Pharmacie',
+                    style: AppTextStyles.h2.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      pharmacie?.nom ?? 'Ma Pharmacie',
-                      style: AppTextStyles.h2.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      now,
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white60,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    now,
+                    style: AppTextStyles.small.copyWith(color: Colors.white60),
+                  ),
+                ],
               ),
               _buildConnectionBadge(isOnline),
             ],
@@ -211,63 +205,49 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
-          child: Row(
+          child: ResponsiveRow(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Ventes du jour',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white70,
-                      ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ventes du jour',
+                    style: AppTextStyles.small.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${NumberFormat.decimalPattern('fr_FR').format(stats.ventesJour)} FC',
+                    style: AppTextStyles.h2.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${NumberFormat.decimalPattern('fr_FR').format(stats.ventesJour)} FC',
-                      style: AppTextStyles.h2.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '${stats.ventesCount} transaction${stats.ventesCount > 1 ? 's' : ''}',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white60,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  Text(
+                    '${stats.ventesCount} transaction${stats.ventesCount > 1 ? 's' : ''}',
+                    style: AppTextStyles.small.copyWith(color: Colors.white60),
+                  ),
+                ],
               ),
-              Container(width: 1, height: 50, color: Colors.white24),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bénéfices',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white70,
-                      ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bénéfices',
+                    style: AppTextStyles.small.copyWith(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${NumberFormat.decimalPattern('fr_FR').format(stats.beneficesJour)} FC',
+                    style: AppTextStyles.h3.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${NumberFormat.decimalPattern('fr_FR').format(stats.beneficesJour)} FC',
-                      style: AppTextStyles.h3.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      'Aujourd\'hui',
-                      style: AppTextStyles.small.copyWith(
-                        color: Colors.white60,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  Text(
+                    'Aujourd\'hui',
+                    style: AppTextStyles.small.copyWith(color: Colors.white60),
+                  ),
+                ],
               ),
             ],
           ),
@@ -293,13 +273,8 @@ class DashboardScreen extends ConsumerWidget {
       error: (_, __) => const SizedBox(),
       data: (stats) {
         if (stats == null) return const SizedBox();
-        return GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.6,
+        return ResponsiveGrid(
+          minItemWidth: 155,
           children: [
             _StatCard(
               label: 'Total produits',
@@ -365,12 +340,8 @@ class DashboardScreen extends ConsumerWidget {
       children: [
         Text('Accès rapide', style: AppTextStyles.h3),
         const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+        ResponsiveGrid(
+          minItemWidth: 100,
           children: actions
               .map((a) => _buildQuickActionItem(context, a))
               .toList(),
@@ -383,6 +354,7 @@ class DashboardScreen extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.go(a.route),
       child: Container(
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -395,6 +367,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             Text(
               a.label,
+              textAlign: TextAlign.center,
               style: AppTextStyles.caption.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -487,7 +460,7 @@ class _StatCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: color, size: 20),
-            const Spacer(),
+            const SizedBox(height: 12),
             Text(
               value,
               style: AppTextStyles.h2.copyWith(

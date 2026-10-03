@@ -82,7 +82,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           const Text(
-            'Cette configuration est effectuée une seule fois. Les autres appareils retrouveront la même pharmacie avec le même compte.',
+            'Renseignez votre pharmacie pour demander son activation après la vente. Votre fournisseur verra uniquement ces coordonnées et le statut du compte, pas vos stocks ni vos ventes. Après activation, vos appareils utiliseront le même compte.',
           ),
           const SizedBox(height: 20),
           _field(_name, 'Nom de la pharmacie', Icons.local_pharmacy_outlined),

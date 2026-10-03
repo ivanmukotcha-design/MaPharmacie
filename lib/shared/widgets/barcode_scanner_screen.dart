@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'responsive_layout.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
@@ -23,7 +24,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     appBar: AppBar(title: const Text('Scanner un code-barres')),
     body: MobileScanner(
       controller: _controller,
-      errorBuilder: (_, error, __) => Center(
+      errorBuilder: (_, error, __) => ScrollableEmptyState(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(

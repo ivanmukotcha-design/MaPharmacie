@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:go_router/go_router.dart';
+import 'responsive_layout.dart';
 
 class PfButton extends StatelessWidget {
   final String label;
@@ -305,6 +306,9 @@ class MainScaffold extends StatelessWidget {
     int currentIndex = _tabs.indexWhere((t) => location.startsWith(t));
     if (currentIndex < 0) currentIndex = 0;
 
+    final wide =
+        MediaQuery.sizeOf(context).width >= 1000 &&
+        MediaQuery.sizeOf(context).height >= 500;
     return BackButtonListener(
       onBackButtonPressed: () async {
         final router = GoRouter.of(context);
@@ -323,61 +327,105 @@ class MainScaffold extends StatelessWidget {
             return true;
           },
           child: Scaffold(
-            body: child,
-            bottomNavigationBar: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: AppColors.border, width: 1),
-                ),
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    _navItem(
-                      context,
-                      0,
-                      Icons.dashboard_outlined,
-                      Icons.dashboard_rounded,
-                      'Accueil',
-                      currentIndex,
+            resizeToAvoidBottomInset: false,
+            body: wide
+                ? Row(
+                    children: [
+                      SafeArea(
+                        minimum: EdgeInsets.only(
+                          bottom: MediaQuery.viewInsetsOf(context).bottom,
+                        ),
+                        child: NavigationRail(
+                          scrollable: true,
+                          selectedIndex: currentIndex,
+                          onDestinationSelected: (index) =>
+                              context.go(_tabs[index]),
+                          labelType: NavigationRailLabelType.all,
+                          destinations: const [
+                            NavigationRailDestination(
+                              icon: Icon(Icons.dashboard_outlined),
+                              label: Text('Accueil'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.medication_outlined),
+                              label: Text('Stock'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.shopping_cart_outlined),
+                              label: Text('Ventes'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.bar_chart_outlined),
+                              label: Text('Rapports'),
+                            ),
+                            NavigationRailDestination(
+                              icon: Icon(Icons.settings_outlined),
+                              label: Text('Paramètres'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(child: ResponsivePage(child: child)),
+                    ],
+                  )
+                : ResponsivePage(child: child),
+            bottomNavigationBar:
+                wide || MediaQuery.viewInsetsOf(context).bottom > 0
+                ? null
+                : Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        top: BorderSide(color: AppColors.border, width: 1),
+                      ),
                     ),
-                    _navItem(
-                      context,
-                      1,
-                      Icons.medication_outlined,
-                      Icons.medication_rounded,
-                      'Stock',
-                      currentIndex,
+                    child: SafeArea(
+                      child: Row(
+                        children: [
+                          _navItem(
+                            context,
+                            0,
+                            Icons.dashboard_outlined,
+                            Icons.dashboard_rounded,
+                            'Accueil',
+                            currentIndex,
+                          ),
+                          _navItem(
+                            context,
+                            1,
+                            Icons.medication_outlined,
+                            Icons.medication_rounded,
+                            'Stock',
+                            currentIndex,
+                          ),
+                          _navItem(
+                            context,
+                            2,
+                            Icons.shopping_cart_outlined,
+                            Icons.shopping_cart_rounded,
+                            'Ventes',
+                            currentIndex,
+                          ),
+                          _navItem(
+                            context,
+                            3,
+                            Icons.bar_chart_outlined,
+                            Icons.bar_chart_rounded,
+                            'Rapports',
+                            currentIndex,
+                          ),
+                          _navItem(
+                            context,
+                            4,
+                            Icons.settings_outlined,
+                            Icons.settings_rounded,
+                            'Paramètres',
+                            currentIndex,
+                          ),
+                        ],
+                      ),
                     ),
-                    _navItem(
-                      context,
-                      2,
-                      Icons.shopping_cart_outlined,
-                      Icons.shopping_cart_rounded,
-                      'Ventes',
-                      currentIndex,
-                    ),
-                    _navItem(
-                      context,
-                      3,
-                      Icons.bar_chart_outlined,
-                      Icons.bar_chart_rounded,
-                      'Rapports',
-                      currentIndex,
-                    ),
-                    _navItem(
-                      context,
-                      4,
-                      Icons.settings_outlined,
-                      Icons.settings_rounded,
-                      'Paramètres',
-                      currentIndex,
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
         ),
       ),
@@ -424,6 +472,7 @@ class MainScaffold extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 label,
+                textAlign: TextAlign.center,
                 style: AppTextStyles.caption.copyWith(
                   color: selected ? AppColors.primary : AppColors.textMuted,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w400,

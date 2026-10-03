@@ -26,6 +26,11 @@ class PharmacieSettingsService {
       if (_currentUserId() != pharmacieId || !profile.exists) {
         throw StateError('Profil indisponible ou compte non autorisé.');
       }
+      if ((profile.data()?['access_status'] ?? 'active') != 'active') {
+        throw StateError(
+          'Ce compte ne peut pas modifier ses paramètres de vente.',
+        );
+      }
       transaction.update(reference, {'tarifs_gros_actifs': enabled});
     });
   }

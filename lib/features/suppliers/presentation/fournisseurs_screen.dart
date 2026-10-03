@@ -10,6 +10,7 @@ import '../../../repositories/fournisseur_repository.dart';
 import '../../../shared/widgets/pf_button.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
 import '../../../shared/widgets/pf_text_field.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 class FournisseursScreen extends ConsumerStatefulWidget {
   const FournisseursScreen({super.key});
@@ -46,13 +47,13 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 if (snap.hasError)
-                  return Center(
+                  return ScrollableEmptyState(
                     child: Text('Chargement impossible : ${snap.error}'),
                   );
                 final fournisseurs = snap.data ?? [];
 
                 if (fournisseurs.isEmpty) {
-                  return Center(
+                  return ScrollableEmptyState(
                     child: Padding(
                       padding: const EdgeInsets.all(AppSpacing.xxl),
                       child: Column(
@@ -110,6 +111,7 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         title: const Text('Archiver ?'),
         content: Text(
           'Archiver ${f.nom} sans supprimer les références historiques ?',
@@ -142,6 +144,8 @@ class _FournisseursScreenState extends ConsumerState<FournisseursScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: 720),
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddFournisseurSheet(fournisseur: fournisseur),
     );
@@ -168,59 +172,74 @@ class _FournisseurCard extends StatelessWidget {
         borderRadius: AppBorderRadius.lg,
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.1),
-              borderRadius: AppBorderRadius.md,
-            ),
-            child: Center(
-              child: Text(
-                fournisseur.nom.isEmpty
-                    ? '?'
-                    : fournisseur.nom[0].toUpperCase(),
-                style: AppTextStyles.h2.copyWith(color: AppColors.secondary),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(fournisseur.nom, style: AppTextStyles.label),
-                if (fournisseur.telephone.isNotEmpty)
-                  Text(
-                    fournisseur.telephone,
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textMuted,
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withOpacity(0.1),
+                  borderRadius: AppBorderRadius.md,
+                ),
+                child: Center(
+                  child: Text(
+                    fournisseur.nom.isEmpty
+                        ? '?'
+                        : fournisseur.nom[0].toUpperCase(),
+                    style: AppTextStyles.h2.copyWith(
+                      color: AppColors.secondary,
                     ),
                   ),
-              ],
-            ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fournisseur.nom, style: AppTextStyles.label),
+                    if (fournisseur.telephone.isNotEmpty)
+                      Text(
+                        fournisseur.telephone,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.phone_outlined,
-              color: AppColors.primary,
-              size: 22,
-            ),
-            onPressed: () => _appeler(fournisseur.telephone),
-          ),
-          IconButton(
-            icon: const Icon(
-              Icons.delete_outline,
-              color: AppColors.danger,
-              size: 22,
-            ),
-            onPressed: onDelete,
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined, size: 22),
-            onPressed: onEdit,
+          Wrap(
+            alignment: WrapAlignment.end,
+            children: [
+              IconButton(
+                tooltip: 'Appeler le fournisseur',
+                icon: const Icon(
+                  Icons.phone_outlined,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+                onPressed: () => _appeler(fournisseur.telephone),
+              ),
+              IconButton(
+                tooltip: 'Archiver le fournisseur',
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.danger,
+                  size: 22,
+                ),
+                onPressed: onDelete,
+              ),
+              IconButton(
+                tooltip: 'Modifier le fournisseur',
+                icon: const Icon(Icons.edit_outlined, size: 22),
+                onPressed: onEdit,
+              ),
+            ],
           ),
         ],
       ),

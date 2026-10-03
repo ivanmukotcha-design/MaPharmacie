@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "account_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "client_id", "order": "ASCENDING" },
+        { "fieldPath": "revision", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "medicaments",
       "queryScope": "COLLECTION",
       "fields": [

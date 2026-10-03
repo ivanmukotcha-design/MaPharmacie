@@ -16,6 +16,10 @@ class PharmacieModel {
   final String proprietaireNom;
   final DateTime createdAt;
   final bool tarifsGrosActifs;
+  final String accessStatus;
+  bool get canReadData =>
+      accessStatus == 'active' || accessStatus == 'suspended';
+  bool get canWriteData => accessStatus == 'active';
 
   const PharmacieModel({
     required this.id,
@@ -30,6 +34,7 @@ class PharmacieModel {
     required this.proprietaireNom,
     required this.createdAt,
     this.tarifsGrosActifs = false,
+    this.accessStatus = 'active',
   });
 
   factory PharmacieModel.fromMap(Map<String, dynamic> map, String id) =>
@@ -47,6 +52,7 @@ class PharmacieModel {
         createdAt:
             (map['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
         tarifsGrosActifs: map['tarifs_gros_actifs'] == true,
+        accessStatus: map['access_status'] as String? ?? 'active',
       );
 
   Map<String, dynamic> toMap() => {
@@ -61,6 +67,7 @@ class PharmacieModel {
     'proprietaire_nom': proprietaireNom,
     'created_at': Timestamp.fromDate(createdAt),
     'tarifs_gros_actifs': tarifsGrosActifs,
+    'access_status': accessStatus,
   };
 }
 

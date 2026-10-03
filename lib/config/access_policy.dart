@@ -15,6 +15,14 @@ String? sessionRedirect({
   if (pharmacie == null)
     return location == '/configurer' ? null : '/configurer';
   if (pharmacie.id != userId) return location == '/acces' ? null : '/acces';
+  if (!pharmacie.canWriteData) {
+    final allowed = [
+      '/acces',
+      '/support',
+      if (pharmacie.canReadData) '/sauvegardes',
+    ];
+    return allowed.contains(location) ? null : '/acces';
+  }
   if ([
         '/login',
         '/configurer',

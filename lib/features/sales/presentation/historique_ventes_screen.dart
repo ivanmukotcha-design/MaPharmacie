@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../config/auth_provider.dart';
 import '../../../local_database/local_database.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 // ─── HISTORIQUE VENTES ────────────────────────────────────────────────────────
 class HistoriqueVentesScreen extends ConsumerStatefulWidget {
@@ -46,7 +47,7 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
           }
           final ventes = snap.data ?? [];
           if (ventes.isEmpty) {
-            return Center(
+            return ScrollableEmptyState(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -75,44 +76,41 @@ class _HistoriqueState extends ConsumerState<HistoriqueVentesScreen> {
             totalBenefices += (v['benefice'] as num?)?.toDouble() ?? 0;
           }
 
-          return Column(
-            children: [
-              // Résumé
-              Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _summaryItem(
-                        'Ventes totales',
-                        '${totalVentes.toStringAsFixed(0)} FC',
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child:
+                    // Résumé
+                    Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: ResponsiveRow(
+                        children: [
+                          _summaryItem(
+                            'Ventes totales',
+                            '${totalVentes.toStringAsFixed(0)} FC',
+                          ),
+                          _summaryItem(
+                            'Bénéfices',
+                            '${totalBenefices.toStringAsFixed(0)} FC',
+                          ),
+                          _summaryItem('Transactions', '${ventes.length}'),
+                        ],
                       ),
                     ),
-                    Container(width: 1, height: 40, color: Colors.white24),
-                    Expanded(
-                      child: _summaryItem(
-                        'Bénéfices',
-                        '${totalBenefices.toStringAsFixed(0)} FC',
-                      ),
-                    ),
-                    Container(width: 1, height: 40, color: Colors.white24),
-                    Expanded(
-                      child: _summaryItem('Transactions', '${ventes.length}'),
-                    ),
-                  ],
-                ),
               ),
-              Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                sliver: SliverList.builder(
                   itemCount: ventes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _VenteRow(vente: ventes[i]),
+                  itemBuilder: (_, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _VenteRow(vente: ventes[index]),
+                  ),
                 ),
               ),
             ],
@@ -177,41 +175,47 @@ class _VenteRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: (isGros ? AppColors.secondary : AppColors.primary)
-                  .withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              isGros ? Icons.warehouse_outlined : Icons.storefront_outlined,
-              color: isGros ? AppColors.secondary : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isGros ? 'Vente Grossiste' : 'Vente Détail',
-                  style: AppTextStyles.label,
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: (isGros ? AppColors.secondary : AppColors.primary)
+                      .withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                if (date != null)
-                  Text(
-                    '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textMuted,
+                child: Icon(
+                  isGros ? Icons.warehouse_outlined : Icons.storefront_outlined,
+                  color: isGros ? AppColors.secondary : AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isGros ? 'Vente Grossiste' : 'Vente Détail',
+                      style: AppTextStyles.label,
                     ),
-                  ),
-              ],
-            ),
+                    if (date != null)
+                      Text(
+                        '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} à ${date.hour}:${date.minute.toString().padLeft(2, '0')}',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

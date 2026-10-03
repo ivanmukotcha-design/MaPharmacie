@@ -12,6 +12,7 @@ import '../../../shared/widgets/pf_button.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
 import 'catalogue_vente.dart';
 import 'panier.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 void _panierAction(BuildContext context, VoidCallback action) {
   try {
@@ -118,22 +119,30 @@ class VenteScreen extends ConsumerWidget {
                         ),
                     ],
                   ),
-                  Column(
-                    children: [
-                      if (panier.isNotEmpty)
-                        _PanierHeader(
-                          count: panier.length,
-                          total: notifier.total,
+                  panier.isEmpty
+                      ? const _EmptyPanier()
+                      : CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: _PanierHeader(
+                                count: panier.length,
+                                total: notifier.total,
+                              ),
+                            ),
+                            SliverPadding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                              ),
+                              sliver: _PanierList(
+                                panier: panier,
+                                notifier: notifier,
+                              ),
+                            ),
+                            SliverToBoxAdapter(
+                              child: _BoutonFinaliser(typeVente: typeVente),
+                            ),
+                          ],
                         ),
-                      Expanded(
-                        child: panier.isEmpty
-                            ? const _EmptyPanier()
-                            : _PanierList(panier: panier, notifier: notifier),
-                      ),
-                      if (panier.isNotEmpty)
-                        _BoutonFinaliser(typeVente: typeVente),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -198,11 +207,14 @@ class _TypeVenteToggle extends ConsumerWidget {
                 color: isSelected ? Colors.white : AppColors.textMuted,
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                label,
-                style: AppTextStyles.label.copyWith(
-                  color: isSelected ? Colors.white : AppColors.textMuted,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.label.copyWith(
+                    color: isSelected ? Colors.white : AppColors.textMuted,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -227,10 +239,10 @@ class _PanierHeader extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.sm,
       ),
-      child: Row(
+      child: ResponsiveRow(
+        breakpoint: 500,
         children: [
           Text('Panier ($count)', style: AppTextStyles.h4),
-          const Spacer(),
           Text(
             '${total.toStringAsFixed(0)} FC',
             style: AppTextStyles.h4.copyWith(
@@ -251,22 +263,21 @@ class _PanierList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+    return SliverList.builder(
       itemCount: panier.length,
       itemBuilder: (context, index) {
         final item = panier[index];
         return Card(
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: 4,
             ),
-            title: Text(item.medicament.nom, style: AppTextStyles.label),
-            subtitle: Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(item.medicament.nom, style: AppTextStyles.label),
                 Text(
                   '${item.prixApplique.toStringAsFixed(2)} FC x ${item.quantite}',
                   style: AppTextStyles.small.copyWith(
@@ -274,6 +285,7 @@ class _PanierList extends StatelessWidget {
                   ),
                 ),
                 DropdownButton<String>(
+                  isExpanded: true,
                   value: item.unite,
                   items:
                       (item.medicament.unitePrix == 'flacon'
@@ -294,34 +306,34 @@ class _PanierList extends StatelessWidget {
                       );
                   },
                 ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: AppBorderRadius.sm,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.remove, size: 18),
+                        onPressed: () => notifier.decrementer(index),
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                      ),
+                      Text('${item.quantite}', style: AppTextStyles.bodyMedium),
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 18),
+                        onPressed: () => _panierAction(
+                          context,
+                          () => notifier.incrementer(index),
+                        ),
+                        constraints: const BoxConstraints(),
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ),
-            trailing: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: AppBorderRadius.sm,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove, size: 18),
-                    onPressed: () => notifier.decrementer(index),
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                  ),
-                  Text('${item.quantite}', style: AppTextStyles.bodyMedium),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 18),
-                    onPressed: () => _panierAction(
-                      context,
-                      () => notifier.incrementer(index),
-                    ),
-                    constraints: const BoxConstraints(),
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                  ),
-                ],
-              ),
             ),
           ),
         );
@@ -334,7 +346,7 @@ class _EmptyPanier extends StatelessWidget {
   const _EmptyPanier();
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return ScrollableEmptyState(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [

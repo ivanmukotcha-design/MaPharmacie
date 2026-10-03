@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
@@ -313,6 +314,7 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
 
             _section('Tarifs', [
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 value: _unitePrix,
                 decoration: const InputDecoration(
                   labelText: 'Unité de référence des prix',
@@ -339,35 +341,29 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
                 validator: validatePrice,
               ),
               const SizedBox(height: 14),
-              Row(
+              ResponsiveRow(
                 children: [
                   if (ref.watch(wholesaleEnabledProvider))
-                    Expanded(
-                      child: PfTextField(
-                        controller: _prixGrossisteCtrl,
-                        label: 'Prix de gros facultatif (FC / $_unitePrix)',
-                        hint: '0',
-                        prefixIcon: Icons.warehouse_outlined,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? null
-                            : validatePrice(value),
-                      ),
-                    ),
-                  if (ref.watch(wholesaleEnabledProvider))
-                    const SizedBox(width: 12),
-                  Expanded(
-                    child: PfTextField(
-                      controller: _prixDetailCtrl,
-                      label: 'Prix détail (FC / $_unitePrix)',
+                    PfTextField(
+                      controller: _prixGrossisteCtrl,
+                      label: 'Prix de gros facultatif (FC / $_unitePrix)',
                       hint: '0',
-                      prefixIcon: Icons.storefront_outlined,
-                      keyboardType: TextInputType.number,
-                      validator: validatePrice,
+                      prefixIcon: Icons.warehouse_outlined,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? null
+                          : validatePrice(value),
                     ),
+                  PfTextField(
+                    controller: _prixDetailCtrl,
+                    label: 'Prix détail (FC / $_unitePrix)',
+                    hint: '0',
+                    prefixIcon: Icons.storefront_outlined,
+                    keyboardType: TextInputType.number,
+                    validator: validatePrice,
                   ),
                 ],
               ),
@@ -389,22 +385,20 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
+              ResponsiveRow(
+                breakpoint: 500,
                 children: [
                   _uniteField(_cartonsCtrl, 'Cartons'),
-                  const SizedBox(width: 8),
                   _uniteField(_boitesCtrl, 'Boîtes'),
-                  const SizedBox(width: 8),
                   _uniteField(_plaquettesCtrl, 'Plaquettes'),
                 ],
               ),
               const SizedBox(height: 10),
-              Row(
+              ResponsiveRow(
+                breakpoint: 500,
                 children: [
                   _uniteField(_comprimesCtrl, 'Comprimés'),
-                  const SizedBox(width: 8),
                   _uniteField(_flaconsCtrl, 'Flacons'),
-                  const Expanded(child: SizedBox()),
                 ],
               ),
               const SizedBox(height: 14),
@@ -511,6 +505,7 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
 
   Widget _categorieDropdown() {
     return DropdownButtonFormField<String>(
+      isExpanded: true,
       value: _categorie,
       decoration: InputDecoration(
         labelText: 'Catégorie',
@@ -542,19 +537,20 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
             children: [
               const Icon(Icons.info_outline, color: AppColors.info, size: 16),
               const SizedBox(width: 6),
-              Text(
-                'Conversion des unités',
-                style: AppTextStyles.caption.copyWith(color: AppColors.info),
+              Expanded(
+                child: Text(
+                  'Conversion des unités',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.info),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
+          ResponsiveRow(
+            breakpoint: 650,
             children: [
               _convField(_cartonsParBoiteCtrl, '1 carton =', 'boîtes'),
-              const SizedBox(width: 8),
               _convField(_boitesParPlaquetteCtrl, '1 boîte =', 'plaquettes'),
-              const SizedBox(width: 8),
               _convField(_plaquettesParComprimeCtrl, '1 plaquette =', 'cps'),
             ],
           ),
@@ -564,83 +560,75 @@ class _MedicamentFormScreenState extends ConsumerState<MedicamentFormScreen> {
   }
 
   Widget _convField(TextEditingController ctrl, String prefix, String suffix) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            prefix,
-            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: ctrl,
-                  enabled: _original?.suiviLots != true,
-                  validator: (value) => validateQuantity(value, positive: true),
-                  keyboardType: TextInputType.number,
-                  style: AppTextStyles.small,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: AppColors.info.withOpacity(0.3),
-                      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          prefix,
+          style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: ctrl,
+                enabled: _original?.suiviLots != true,
+                validator: (value) => validateQuantity(value, positive: true),
+                keyboardType: TextInputType.number,
+                style: AppTextStyles.small,
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: AppColors.info.withOpacity(0.3),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
-              Text(
-                suffix,
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              suffix,
+              style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _uniteField(TextEditingController ctrl, String label) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
-          ),
-          const SizedBox(height: 4),
-          TextFormField(
-            controller: ctrl,
-            enabled: _original?.suiviLots != true,
-            validator: validateQuantity,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMedium,
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 10,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: AppTextStyles.caption.copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 4),
+        TextFormField(
+          controller: ctrl,
+          enabled: _original?.suiviLots != true,
+          validator: validateQuantity,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          style: AppTextStyles.bodyMedium,
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 10,
             ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

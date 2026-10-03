@@ -8,6 +8,7 @@ import '../../../shared/widgets/pf_badge.dart';
 import '../../../shared/widgets/pf_snackbar.dart';
 import '../../../repositories/medicament_repository.dart';
 import '../../../models/models.dart';
+import '../../../shared/widgets/responsive_layout.dart';
 
 class MedicamentDetailScreen extends ConsumerWidget {
   final String id;
@@ -92,8 +93,8 @@ class MedicamentDetailScreen extends ConsumerWidget {
       slivers: [
         // Hero header
         SliverAppBar(
-          expandedHeight: 200,
           pinned: true,
+          title: const Text('Fiche produit'),
           leading: IconButton(
             icon: Container(
               padding: const EdgeInsets.all(6),
@@ -142,61 +143,61 @@ class MedicamentDetailScreen extends ConsumerWidget {
                   _confirmerSuppression(context, ref, med, pharmacie),
             ),
           ],
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withOpacity(0.8),
-                    AppColors.primaryLight,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+        ),
+        SliverToBoxAdapter(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withOpacity(0.8),
+                  AppColors.primaryLight,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 40),
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: med['image_url'] != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: Image.network(
-                                med['image_url'],
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.medication_rounded,
-                                  color: Colors.white,
-                                  size: 44,
-                                ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: med['image_url'] != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Image.network(
+                              med['image_url'],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.medication_rounded,
+                                color: Colors.white,
+                                size: 44,
                               ),
-                            )
-                          : const Icon(
-                              Icons.medication_rounded,
-                              color: Colors.white,
-                              size: 44,
                             ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      med['nom'] ?? '',
-                      style: AppTextStyles.h3.copyWith(color: Colors.white),
-                      textAlign: TextAlign.center,
-                    ),
-                    Text(
-                      med['categorie'] ?? '',
-                      style: AppTextStyles.body.copyWith(color: Colors.white70),
-                    ),
-                  ],
-                ),
+                          )
+                        : const Icon(
+                            Icons.medication_rounded,
+                            color: Colors.white,
+                            size: 44,
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    med['nom'] ?? '',
+                    style: AppTextStyles.h3.copyWith(color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                  Text(
+                    med['categorie'] ?? '',
+                    style: AppTextStyles.body.copyWith(color: Colors.white70),
+                  ),
+                ],
               ),
             ),
           ),
@@ -229,10 +230,11 @@ class MedicamentDetailScreen extends ConsumerWidget {
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               // Statut + expiration
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   PfBadge(label: statutLabel, color: statutColor),
-                  const SizedBox(width: 8),
                   if (dateExp != null)
                     PfBadge(
                       label: expire
@@ -287,8 +289,8 @@ class MedicamentDetailScreen extends ConsumerWidget {
                 _stockRow('Comprimés', med['comprimes'] as int),
                 _stockRow('Flacons', med['flacons'] as int),
                 const Divider(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ResponsiveRow(
+                  breakpoint: 400,
                   children: [
                     Text(
                       'Seuil alerte',
@@ -339,34 +341,30 @@ class MedicamentDetailScreen extends ConsumerWidget {
               ],
 
               // Actions rapides
-              Row(
+              ResponsiveRow(
+                breakpoint: 450,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(
-                        Icons.add_shopping_cart_outlined,
-                        size: 18,
-                      ),
-                      label: const Text('Vendre'),
-                      onPressed: () => context.go('/ventes'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                  OutlinedButton.icon(
+                    icon: const Icon(
+                      Icons.add_shopping_cart_outlined,
+                      size: 18,
+                    ),
+                    label: const Text('Vendre'),
+                    onPressed: () => context.go('/ventes'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      icon: const Icon(
-                        Icons.edit_outlined,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      label: const Text('Modifier'),
-                      onPressed: () => context.push('/medicament/$id/modifier'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                  ElevatedButton.icon(
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                    label: const Text('Modifier'),
+                    onPressed: () => context.push('/medicament/$id/modifier'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ],
@@ -401,19 +399,15 @@ class MedicamentDetailScreen extends ConsumerWidget {
   Widget _ligneInfo(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ResponsiveRow(
+        breakpoint: 450,
+        spacing: 4,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: AppTextStyles.body.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
+          Text(
+            label,
+            style: AppTextStyles.body.copyWith(color: AppColors.textSecondary),
           ),
-          Expanded(child: Text(value, style: AppTextStyles.bodyMedium)),
+          Text(value, style: AppTextStyles.bodyMedium),
         ],
       ),
     );
@@ -422,8 +416,8 @@ class MedicamentDetailScreen extends ConsumerWidget {
   Widget _stockRow(String label, int value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: ResponsiveRow(
+        breakpoint: 400,
         children: [
           Text(
             label,
@@ -458,6 +452,7 @@ class MedicamentDetailScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        scrollable: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Supprimer ce médicament ?'),
         content: Text(

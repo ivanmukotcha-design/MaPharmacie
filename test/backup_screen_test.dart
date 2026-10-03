@@ -74,6 +74,7 @@ void main() {
     files = _Files();
     container = ProviderContainer(
       overrides: [
+        pharmacieWritableProvider.overrideWithValue(true),
         currentUserProvider.overrideWith((ref) => ref.watch(session)),
         repositoryAccessProvider.overrideWithValue(access),
         backupServiceProvider.overrideWithValue(backup),

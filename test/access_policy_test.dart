@@ -4,6 +4,31 @@ import 'package:pharmaflow/models/models.dart';
 import 'fixtures.dart';
 
 void main() {
+  test('Activation obligatoire, suspension sans perte de sauvegarde', () {
+    for (final status in ['pending', 'suspended', 'invalid']) {
+      final profile = PharmacieModel.fromMap({
+        ...pharmacie().toMap(),
+        'access_status': status,
+      }, 'pharma-1');
+      String? destination(String location) => sessionRedirect(
+        location: location,
+        loading: false,
+        hasError: false,
+        userId: 'pharma-1',
+        pharmacie: profile,
+      );
+      expect(destination('/ventes'), '/acces');
+      expect(destination('/configurer'), '/acces');
+      expect(destination('/acces'), isNull);
+      expect(destination('/support'), isNull);
+      expect(
+        destination('/sauvegardes'),
+        status == 'suspended' ? isNull : '/acces',
+      );
+      expect(profile.canWriteData, isFalse);
+      expect(profile.canReadData, status == 'suspended');
+    }
+  });
   String? redirect({
     String location = '/stock',
     String? userId = 'pharma-1',

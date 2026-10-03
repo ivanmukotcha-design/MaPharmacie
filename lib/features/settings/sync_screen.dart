@@ -113,90 +113,108 @@ class _SyncScreenState extends ConsumerState<SyncScreen> {
     final disabled = _busy || running;
     return Scaffold(
       appBar: AppBar(title: const Text('Suivi de synchronisation')),
-      body: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              'Vos opérations restent conservées sur cet appareil. '
-              'Ne désinstallez pas l’application tant que la liste n’est pas vide. '
-              'Les opérations indépendantes peuvent continuer à se synchroniser.',
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Vos opérations restent conservées sur cet appareil. '
+                    'Ne désinstallez pas l’application tant que la liste n’est pas vide. '
+                    'Les opérations indépendantes peuvent continuer à se synchroniser.',
+                  ),
+                ),
+                if (_message != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(_message!),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: FilledButton.icon(
+                    onPressed: disabled
+                        ? null
+                        : () =>
+                              _run(() => ref.read(syncServiceProvider).sync()),
+                    icon: const Icon(Icons.sync),
+                    label: const Text('Réessayer la synchronisation'),
+                  ),
+                ),
+                if (disabled) const LinearProgressIndicator(),
+              ],
             ),
           ),
-          if (_message != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(_message!),
+          operations.when(
+            loading: () => const SliverToBoxAdapter(
+              child: Center(child: CircularProgressIndicator()),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: FilledButton.icon(
-              onPressed: disabled
-                  ? null
-                  : () => _run(() => ref.read(syncServiceProvider).sync()),
-              icon: const Icon(Icons.sync),
-              label: const Text('Réessayer la synchronisation'),
+            error: (error, stack) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(userMessage(error)),
+              ),
             ),
-          ),
-          if (disabled) const LinearProgressIndicator(),
-          Expanded(
-            child: operations.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Center(child: Text(userMessage(error))),
-              data: (entries) => entries.isEmpty
-                  ? const Center(child: Text('Aucune opération en attente.'))
-                  : ListView.builder(
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        final operation = entries[index];
-                        final sale = operation.kind == 'sale';
-                        final name = operation.kind == 'legacy'
-                            ? 'Ancienne opération'
-                            : sale
-                            ? 'Vente ${operation.documentId}'
-                            : '${operation.document['nom'] ?? operation.documentId}';
-                        return Card(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  operation.error ??
-                                      'En attente de synchronisation ou d’une opération précédente.',
-                                ),
-                                if (sale)
-                                  TextButton(
-                                    onPressed: disabled
-                                        ? null
-                                        : () =>
-                                              _run(() => _reconcile(operation)),
-                                    child: const Text(
-                                      'Vérifier et rapprocher la vente',
-                                    ),
-                                  ),
-                                if (!sale && operation.error != null)
-                                  const Text(
-                                    'Pour cette modification de fiche, créez une sauvegarde puis contactez le support. '
-                                    'Aucun écrasement automatique du stock n’est proposé.',
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+            data: (entries) => entries.isEmpty
+                ? const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Center(
+                        child: Text('Aucune opération en attente.'),
+                      ),
                     ),
-            ),
+                  )
+                : SliverList.builder(
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      final operation = entries[index];
+                      final sale = operation.kind == 'sale';
+                      final name = operation.kind == 'legacy'
+                          ? 'Ancienne opération'
+                          : sale
+                          ? 'Vente ${operation.documentId}'
+                          : '${operation.document['nom'] ?? operation.documentId}';
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                operation.error ??
+                                    'En attente de synchronisation ou d’une opération précédente.',
+                              ),
+                              if (sale)
+                                TextButton(
+                                  onPressed: disabled
+                                      ? null
+                                      : () => _run(() => _reconcile(operation)),
+                                  child: const Text(
+                                    'Vérifier et rapprocher la vente',
+                                  ),
+                                ),
+                              if (!sale && operation.error != null)
+                                const Text(
+                                  'Pour cette modification de fiche, créez une sauvegarde puis contactez le support. '
+                                  'Aucun écrasement automatique du stock n’est proposé.',
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

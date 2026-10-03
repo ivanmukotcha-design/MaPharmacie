@@ -46,6 +46,72 @@ GoRouter _createRouter({String initialLocation = '/dashboard'}) {
 }
 
 void main() {
+  for (final size in [
+    const Size(320, 568),
+    const Size(1000, 500),
+    const Size(1280, 800),
+  ]) {
+    testWidgets('Navigation accessible avec texte doublé à ${size.width}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      tester.view.viewPadding = const FakeViewPadding(
+        left: 24,
+        right: 24,
+        bottom: 24,
+      );
+      tester.view.padding = const FakeViewPadding(
+        left: 24,
+        right: 24,
+        bottom: 24,
+      );
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewPadding);
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewInsets);
+      final router = _createRouter();
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        MaterialApp.router(
+          routerConfig: router,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(NavigationRail),
+        size.width >= 1000 ? findsOneWidget : findsNothing,
+      );
+      await tester.tap(find.text('Stock'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('/stock')), findsOneWidget);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      await tester.pumpAndSettle();
+      if (size.width >= 1000) {
+        expect(
+          tester.getRect(find.byType(NavigationRail)).bottom,
+          lessThanOrEqualTo(size.height - 300),
+        );
+      } else {
+        expect(find.text('Stock'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+      tester.view.resetViewInsets();
+      tester.view.physicalSize = const Size(640, 360);
+      await tester.pumpAndSettle();
+      expect(find.byType(NavigationRail), findsNothing);
+      expect(find.byKey(const ValueKey('/stock')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
   var exitRequests = 0;
   var frameworkHandlesBack = false;
 
@@ -185,9 +251,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await back(tester);
-        expect(find.text('Confirmation'), findsNothing);
-        expect(find.byKey(const ValueKey('/stock')), findsOneWidget);
-        expect(frameworkHandlesBack, isTrue);
+      expect(find.text('Confirmation'), findsNothing);
+      expect(find.byKey(const ValueKey('/stock')), findsOneWidget);
+      expect(frameworkHandlesBack, isTrue);
       expect(exitRequests, 0);
       await back(tester);
       expect(find.byKey(const ValueKey('/dashboard')), findsOneWidget);

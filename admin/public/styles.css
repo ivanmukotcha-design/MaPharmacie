@@ -1,0 +1,53 @@
+:root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #132d27; background: #f3f6f8; font-size: 16px; line-height: 1.55; --green: #0b6e4f; --border: #d5e0e4; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+button, input, select, textarea { font: inherit; }
+button { border: 1px solid transparent; background: var(--green); color: white; padding: .7rem 1rem; border-radius: .6rem; cursor: pointer; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+button:disabled { opacity: .55; cursor: wait; }
+button:hover:not(:disabled) { filter: brightness(.92); }
+button.secondary { color: #174c3d; background: white; border-color: var(--border); }
+button.text-button { color: var(--green); background: transparent; padding-left: 0; }
+:focus-visible { outline: 3px solid #2469be; outline-offset: 3px; }
+input:not([type=checkbox]), textarea, select { width: 100%; min-width: 0; border: 1px solid #9cafb4; padding: .7rem; border-radius: .45rem; background: white; color: #132d27; }
+label { display: grid; gap: .4rem; font-weight: 600; }
+form { display: grid; gap: 1rem; }
+h1, h2, h3 { line-height: 1.25; margin-top: 0; overflow-wrap: anywhere; }
+h1 { font-size: clamp(1.65rem, 3vw, 2.1rem); margin-bottom: .6rem; }
+h2 { font-size: 1.4rem; }
+h3 { margin: 1.5rem 0 .8rem; font-size: 1.05rem; }
+p, dd, li, .brand { overflow-wrap: anywhere; }
+.topbar { background: #073b2d; color: white; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem max(1rem, calc((100vw - 1200px)/2)); }
+.brand { font-size: 1.25rem; font-weight: 750; }
+.brand span { display: block; font-size: .85rem; font-weight: 450; color: #c8e5db; }
+main { max-width: 1200px; margin: auto; padding: 1.5rem 1rem 3rem; }
+.panel { border: 1px solid var(--border); background: white; border-radius: .85rem; padding: 1.5rem; }
+.login { max-width: 500px; margin: 2rem auto; }
+.eyebrow { color: var(--green); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 750; }
+.muted, .privacy { color: #51656c; font-size: .9rem; }
+.heading, .dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem; margin-top: 1rem; }
+.stat { padding: 1rem 1.2rem; border: 1px solid var(--border); border-radius: .7rem; background: white; }
+.stat strong { display: block; font-size: 2rem; }
+.filters { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
+.clients { display: grid; gap: .7rem; }
+.client { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding: 1rem; background: #f7f9fa; border-radius: .65rem; border: 1px solid var(--border); }
+.client-info { flex: 1 1 220px; min-width: 0; }
+.client-info h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
+.client-info p { margin: .2rem 0; }
+.badge { display: inline-block; padding: .2rem .65rem; border-radius: .4rem; font-size: .85rem; font-weight: 700; }
+.pending { background: #fff0cc; color: #735000; }
+.active { background: #d6f1e5; color: #075238; }
+.suspended { background: #ffe0df; color: #8c2524; }
+#load-more { margin-top: 1rem; }
+#message:not(:empty), #detail-message:not(:empty) { border-left: 4px solid #2568a7; background: #e8f0fa; padding: .8rem 1rem; }
+dialog { color: inherit; width: min(680px, calc(100% - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; border: 1px solid var(--border); border-radius: .85rem; padding: 1.5rem; }
+dialog::backdrop { background: rgb(0 24 18 / 55%); }
+dl { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr); gap: .6rem 1rem; }
+dt { color: #51656c; }
+dd { margin: 0; }
+.check { display: flex; align-items: flex-start; gap: .7rem; font-weight: 450; }
+.check input { flex: 0 0 auto; width: 20px; height: 20px; }
+ol { padding-left: 1.4rem; }
+li { padding-bottom: .8rem; }
+@media (max-width: 600px) { .filters, dl { grid-template-columns: 1fr; } .panel, dialog { padding: 1rem; } .login { margin-top: 1rem; } .client > button { width: 100%; } dd { margin-bottom: .5rem; } }
