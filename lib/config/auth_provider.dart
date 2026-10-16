@@ -23,7 +23,7 @@ final currentUserProvider = Provider<User?>(
 
 final currentPharmacieProvider = StreamProvider<PharmacieModel?>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return Stream.value(null);
+  if (user == null || !user.emailVerified) return Stream.value(null);
   return ref
       .watch(firestoreProvider)
       .collection('pharmacies')
@@ -51,6 +51,7 @@ final pharmacieAuthorizedProvider = Provider<bool>((ref) {
   final user = ref.watch(currentUserProvider);
   final profile = ref.watch(currentPharmacieProvider);
   return user != null &&
+      user.emailVerified &&
       !profile.hasError &&
       profile.valueOrNull?.id == user.uid &&
       profile.valueOrNull?.canReadData == true;
@@ -78,6 +79,9 @@ final authServiceProvider = Provider<AuthService>(
 class AuthService {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  String? _verificationUid;
+  DateTime? _verificationSentAt;
+  bool _sendingVerification = false;
   AuthService(this._firestore, this._auth);
 
   Future<UserCredential> loginWithEmail(String email, String password) async {
@@ -85,7 +89,7 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
-    if (result.user != null) {
+    if (result.user?.emailVerified == true) {
       await NotificationService.updateTokenForPharmacie(result.user!.uid);
     }
     return result;
@@ -106,6 +110,61 @@ class AuthService {
   Future<void> resetPassword(String email) =>
       _auth.sendPasswordResetEmail(email: email.trim());
 
+  int get verificationResendSeconds {
+    if (_verificationUid != _auth.currentUser?.uid ||
+        _verificationSentAt == null) {
+      return 0;
+    }
+    final remaining =
+        60 - DateTime.now().difference(_verificationSentAt!).inSeconds;
+    return remaining.clamp(0, 60);
+  }
+
+  Future<bool> sendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Connexion requise.');
+    if (user.emailVerified ||
+        _sendingVerification ||
+        verificationResendSeconds > 0) {
+      return false;
+    }
+    _sendingVerification = true;
+    try {
+      await _auth.setLanguageCode('fr');
+      if (_auth.currentUser?.uid != user.uid) {
+        throw StateError('La session a changé.');
+      }
+      await user.sendEmailVerification();
+      _verificationUid = user.uid;
+      _verificationSentAt = DateTime.now();
+      return true;
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'too-many-requests') {
+        _verificationUid = user.uid;
+        _verificationSentAt = DateTime.now();
+      }
+      rethrow;
+    } finally {
+      _sendingVerification = false;
+    }
+  }
+
+  Future<bool> refreshEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('Connexion requise.');
+    await user.reload();
+    final refreshed = _auth.currentUser;
+    if (refreshed == null || refreshed.uid != user.uid) {
+      throw StateError('La session a changé.');
+    }
+    if (!refreshed.emailVerified) return false;
+    final token = await refreshed.getIdTokenResult(true);
+    if (_auth.currentUser?.uid != user.uid) {
+      throw StateError('La session a changé.');
+    }
+    return token.claims?['email_verified'] == true;
+  }
+
   Future<void> logout() async {
     await NotificationService.detachCurrentUser();
     await _auth.signOut();
@@ -122,6 +181,9 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null || user.email == null)
       throw StateError('Connexion requise.');
+    if (!user.emailVerified) {
+      throw StateError('Confirmez votre adresse email avant de continuer.');
+    }
     final values = [nom, telephone, adresse, ville, pays, proprietaireNom];
     if (values.any((value) => value.trim().isEmpty)) {
       throw const FormatException(

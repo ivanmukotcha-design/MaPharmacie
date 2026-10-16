@@ -92,8 +92,11 @@ class NotificationService {
   }
 
   static Future<void> updateTokenForPharmacie(String pharmacieId) async {
-    if (!supported || FirebaseAuth.instance.currentUser?.uid != pharmacieId)
+    if (!supported ||
+        FirebaseAuth.instance.currentUser?.uid != pharmacieId ||
+        FirebaseAuth.instance.currentUser?.emailVerified != true) {
       return;
+    }
     _boundUid = pharmacieId;
     try {
       _token ??= await FirebaseMessaging.instance.getToken().timeout(

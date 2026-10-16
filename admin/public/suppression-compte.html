@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Suppression du compte — Ma Pharmacie</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="legal-page.mjs"></script>
+</head>
+<body data-page="deletion">
+  <header class="topbar"><div class="brand" id="app-name">Ma Pharmacie</div></header>
+  <main class="legal-page">
+    <h1>Demander la suppression du compte et des données</h1>
+    <p>Cette page reste accessible sans connexion et sans installer l’application.</p>
+    <p id="legal-status" role="status">Chargement des informations…</p>
+    <p id="publisher"></p><p>Contact : <span id="contact">coordonnées en cours de validation</span></p>
+    <div id="legal-content"></div>
+    <section id="request-options" class="panel" hidden>
+      <h2>Préparer votre demande</h2>
+      <label class="check"><input id="confirm-owner" type="checkbox"><span>Je suis habilité à faire cette demande et je comprends qu’elle concerne toute la pharmacie.</span></label>
+      <p><a id="email-request" hidden>Ouvrir ma messagerie pour préparer la demande</a></p>
+      <p>Vérifiez le brouillon et envoyez-le depuis votre messagerie. Aucune demande n’est envoyée automatiquement et aucun compte n’est supprimé par ce lien.</p>
+      <p>Si la messagerie ne s’ouvre pas, copiez l’adresse de contact affichée et envoyez votre demande en indiquant l’email du compte et le nom de la pharmacie. N’envoyez ni mot de passe ni données médicales.</p>
+    </section>
+    <nav class="public-links" aria-label="Informations légales"><a href="confidentialite.html">Politique de confidentialité</a></nav>
+    <noscript>Activez JavaScript pour consulter la procédure et les coordonnées de contact.</noscript>
+  </main>
+</body>
+</html>

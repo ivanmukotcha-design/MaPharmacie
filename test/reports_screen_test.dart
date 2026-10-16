@@ -9,6 +9,7 @@ import 'package:pharmaflow/features/support/support_screen.dart';
 import 'package:pharmaflow/models/models.dart';
 import 'package:pharmaflow/repositories/medicament_repository.dart';
 import 'package:pharmaflow/repositories/repository_access.dart';
+import 'package:pharmaflow/services/public_information.dart';
 
 import 'fixtures.dart';
 
@@ -74,11 +75,21 @@ void main() {
   );
 
   testWidgets('L’aide explique le partage du PDF', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: SupportScreen()));
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.runAsync(() => container.read(publicInformationProvider.future));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: SupportScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Comment exporter mes rapports ?'),
       200,
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Comment exporter mes rapports ?'));
     await tester.pumpAndSettle();
     expect(find.textContaining('puis PDF'), findsOneWidget);

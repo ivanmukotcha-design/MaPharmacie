@@ -6,6 +6,7 @@ import '../../../config/auth_provider.dart';
 import '../../../core/utils/validators.dart';
 import '../../../shared/widgets/pf_button.dart';
 import '../../../shared/widgets/pf_text_field.dart';
+import '../../settings/privacy_screen.dart';
 
 class CreateAccountScreen extends ConsumerStatefulWidget {
   const CreateAccountScreen({super.key});
@@ -41,7 +42,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
       await ref
           .read(authServiceProvider)
           .createAccount(_email.text, _password.text);
-      if (mounted) context.go('/configurer');
+      if (mounted) context.go('/verifier-email');
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -79,7 +80,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
           padding: const EdgeInsets.all(24),
           children: [
             const Text(
-              'Créez un seul compte pour votre pharmacie. Son activation sera effectuée par votre fournisseur après la vente. Vos autres utilisateurs et appareils utiliseront ensuite les mêmes identifiants.',
+              'Créez un seul compte pour votre pharmacie avec une adresse email à laquelle vous avez accès. Confirmez ensuite le lien reçu par email, puis complétez votre profil. L’activation reste nécessaire avant utilisation. Les autres appareils utiliseront les mêmes identifiants. Choisissez un mot de passe pour cette application, pas celui de votre messagerie.',
             ),
             const SizedBox(height: 24),
             PfTextField(
@@ -126,6 +127,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
               onPressed: _busy ? null : () => context.go('/login'),
               child: const Text('Déjà un compte ? Se connecter'),
             ),
+            const PrivacyLinks(),
           ],
         ),
       ),

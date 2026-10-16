@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permissions réseau -->
     <uses-permission android:name="android.permission.INTERNET"/>
@@ -8,8 +9,10 @@
 
     <!-- Camera pour scanner code-barres et images -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
     <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -17,12 +20,10 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
-    <!-- Biométrie (optionnel) -->
-    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove"/>
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove"/>
 
-    <!-- Appel téléphonique -->
-    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <uses-permission android:name="android.permission.CALL_PHONE" tools:node="remove"/>
 
     <application
         android:label="Ma Pharmacie"
@@ -30,9 +31,11 @@
         android:icon="@mipmap/launcher_icon"
         android:roundIcon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:hardwareAccelerated="true"
-        android:largeHeap="true"
-        android:requestLegacyExternalStorage="true">
+        android:largeHeap="true">
 
         <activity
             android:name=".MainActivity"
@@ -42,8 +45,7 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize"
-            android:screenOrientation="portrait">
+            android:windowSoftInputMode="adjustResize">
 
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"

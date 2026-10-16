@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../config/auth_provider.dart';
+import '../../settings/privacy_screen.dart';
 
 class AccessScreen extends ConsumerWidget {
   const AccessScreen({super.key});
@@ -36,7 +37,7 @@ class AccessScreen extends ConsumerWidget {
                 error
                     ? 'Vérifiez votre connexion. Le profil de votre pharmacie doit être accessible avant de continuer.'
                     : pending
-                    ? 'Votre compte est en attente d’activation après la vente de l’application. Contactez votre fournisseur en indiquant l’email de votre compte. L’activation apparaîtra ici dès sa réception.'
+                    ? 'Votre compte est en attente d’activation. L’accès apparaîtra ici dès sa validation. Si vous disposez déjà d’un accès et rencontrez un problème, contactez le support en indiquant l’email de votre compte.'
                     : suspended
                     ? 'L’accès aux opérations est suspendu. Vos données ne sont pas supprimées. Vous pouvez créer une sauvegarde locale et contacter le support.'
                     : 'Ce profil ne correspond pas au compte connecté ou son accès est indisponible. Contactez le support.',
@@ -66,6 +67,7 @@ class AccessScreen extends ConsumerWidget {
                 onPressed: () => ref.read(authServiceProvider).logout(),
                 child: const Text('Se déconnecter'),
               ),
+              const PrivacyLinks(),
             ],
           ),
         ),

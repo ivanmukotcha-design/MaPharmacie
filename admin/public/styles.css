@@ -49,5 +49,9 @@ dd { margin: 0; }
 .check { display: flex; align-items: flex-start; gap: .7rem; font-weight: 450; }
 .check input { flex: 0 0 auto; width: 20px; height: 20px; }
 ol { padding-left: 1.4rem; }
+.legal-page { max-width: 800px; }
+.legal-page h2 { margin-top: 1.5rem; }
+.legal-page a, .public-links a { overflow-wrap: anywhere; color: #075238; }
+.public-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; }
 li { padding-bottom: .8rem; }
 @media (max-width: 600px) { .filters, dl { grid-template-columns: 1fr; } .panel, dialog { padding: 1rem; } .login { margin-top: 1rem; } .client > button { width: 100%; } dd { margin-bottom: .5rem; } }

@@ -22,14 +22,49 @@ async function write(path, data) {
   expect(response.status).toBe(200);
 }
 
-async function account(prefix) {
+async function account(prefix, verified = true) {
   const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`;
   const response = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, returnSecureToken: true }),
   });
   expect(response.status).toBe(200);
-  return { ...(await response.json()), email };
+  const user = { ...(await response.json()), email };
+  if (verified) {
+    const update = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=demo-key', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({ localId: user.localId, emailVerified: true }),
+    });
+    expect(update.status).toBe(200);
+  }
+  return user;
 }
+
+test('Un administrateur doit confirmer son email avant tout accès aux fiches', async ({ page }) => {
+  const user = await account('admin-unverified', false);
+  await write(`account_admins/${user.localId}`, { enabled: true });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await login(page, user);
+  await expect(page.locator('#verification')).toBeVisible();
+  await expect(page.locator('#workspace')).toBeHidden();
+  await expect(page.locator('#clients')).toBeEmpty();
+  await page.locator('#check-verification').click();
+  await expect(page.locator('#message')).toContainText('pas encore confirmée');
+  await page.locator('#send-verification').click();
+  await expect(page.locator('#message')).toContainText('Lien envoyé');
+  await expect(page.locator('#send-verification')).toBeDisabled();
+  const response = await fetch(`http://127.0.0.1:9099/emulator/v1/projects/${project}/oobCodes`);
+  const codes = (await response.json()).oobCodes;
+  const code = codes.find(entry => entry.email === user.email && entry.requestType === 'VERIFY_EMAIL');
+  expect(code).toBeTruthy();
+  const verified = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=demo-key', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ oobCode: code.oobCode }),
+  });
+  expect(verified.status).toBe(200);
+  await page.locator('#check-verification').click();
+  await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.locator('#verification')).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
 
 async function login(page, user) {
   await page.goto('/?emulators=1');

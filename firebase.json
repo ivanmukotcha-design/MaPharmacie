@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "predeploy": ["node scripts/check_public_information.mjs"],
     "public": "admin/public",
     "ignore": ["**/.*", "**/node_modules/**"],
     "headers": [{"source": "**", "headers": [

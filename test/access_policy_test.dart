@@ -15,6 +15,7 @@ void main() {
         loading: false,
         hasError: false,
         userId: 'pharma-1',
+        emailVerified: true,
         pharmacie: profile,
       );
       expect(destination('/ventes'), '/acces');
@@ -40,6 +41,7 @@ void main() {
     loading: loading,
     hasError: hasError,
     userId: userId,
+    emailVerified: true,
     pharmacie: profile ? pharmacie() : null,
   );
 
@@ -95,6 +97,7 @@ void main() {
         loading: false,
         hasError: false,
         userId: 'pharma-1',
+        emailVerified: true,
         pharmacie: legacy,
       ),
       isNull,

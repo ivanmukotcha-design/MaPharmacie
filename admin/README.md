@@ -63,6 +63,11 @@ service ni secret administrateur ne doit être ajouté aux fichiers publics.
 
 ## Transition des comptes existants
 
+L'interface de confirmation email du tableau de bord est publiée depuis le
+16 octobre 2026. Les règles exigeant cette confirmation ne sont pas encore
+publiées : voir `../docs/EMAIL_VERIFICATION.md`. L'administrateur doit confirmer
+réellement son adresse avant de durcir les règles ; son rôle seul ne suffira plus.
+
 **Ne pas publier les règles sans préparer les appareils et le compte administrateur.**
 
 Les profils existants sans `access_status` gardent leur accès (`active`) : ils

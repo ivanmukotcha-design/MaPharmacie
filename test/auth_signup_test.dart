@@ -13,6 +13,8 @@ import 'package:pharmaflow/features/auth/presentation/login_screen.dart';
 
 class _User extends Fake implements User {
   @override
+  bool emailVerified = false;
+  @override
   final String uid;
   @override
   final String email;
@@ -81,6 +83,9 @@ void main() {
       await service.createAccount(' pharmacie@example.com ', ' password123 ');
       expect(auth.lastEmail, 'pharmacie@example.com');
       expect(auth.lastPassword, ' password123 ');
+      expect(auth.currentUser!.emailVerified, isFalse);
+      await expectLater(configureProfile(), throwsStateError);
+      (auth.user as _User).emailVerified = true;
       expect(
         (await firestore.doc('config/installation').get()).exists,
         isFalse,
@@ -110,6 +115,7 @@ void main() {
     'Un profil incomplet se reprend sans recréer ni supprimer le compte Auth',
     () async {
       await service.createAccount('pharmacie@example.com', 'password123');
+      (auth.user as _User).emailVerified = true;
       await expectLater(configureProfile(name: ' '), throwsFormatException);
       expect(auth.currentUser?.uid, 'nouvelle-pharmacie');
       await configureProfile();
@@ -166,6 +172,10 @@ void main() {
         GoRoute(
           path: '/register',
           builder: (_, __) => const CreateAccountScreen(),
+        ),
+        GoRoute(
+          path: '/verifier-email',
+          builder: (_, __) => const Scaffold(body: Text('Email à confirmer')),
         ),
         GoRoute(
           path: '/configurer',
@@ -225,7 +235,7 @@ void main() {
   });
 
   testWidgets(
-    'Une seule création est envoyée puis le formulaire pharmacie apparaît',
+    'Une seule création est envoyée puis la confirmation email apparaît',
     (tester) async {
       final pending = Completer<void>();
       auth.pending = pending.future;
@@ -237,7 +247,7 @@ void main() {
       expect(auth.calls, 1);
       pending.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Profil à compléter'), findsOneWidget);
+      expect(find.text('Email à confirmer'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

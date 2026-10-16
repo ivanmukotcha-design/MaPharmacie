@@ -6,6 +6,11 @@ const files = new Map([
   ['/app.mjs', ['app.mjs', 'application/javascript']], ['/access.mjs', ['access.mjs', 'application/javascript']],
   ['/boot.mjs', ['boot.mjs', 'application/javascript']],
   ['/styles.css', ['styles.css', 'text/css']],
+  ['/confidentialite.html', ['confidentialite.html', 'text/html']],
+  ['/suppression-compte.html', ['suppression-compte.html', 'text/html']],
+  ['/legal.json', ['legal.json', 'application/json']],
+  ['/legal.mjs', ['legal.mjs', 'application/javascript']],
+  ['/legal-page.mjs', ['legal-page.mjs', 'application/javascript']],
 ]);
 const server = createServer(async (request, response) => {
   const entry = files.get(new URL(request.url, 'http://127.0.0.1:4173').pathname);

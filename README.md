@@ -10,6 +10,13 @@ ne crée pas de projet Firebase et n’exige aucun compte préparé par un techn
 
 ## Fonctionnalités
 
+Préparation à la publication : `docs/GOOGLE_PLAY_RELEASE.md`.
+Confirmation des emails et transition des comptes existants : `docs/EMAIL_VERIFICATION.md`.
+APK de test du 16 octobre 2026 et installation : `docs/APK_TEST.md`.
+Traitement des demandes de suppression : `docs/ACCOUNT_DELETION.md`.
+Les coordonnées publiques de `admin/public/legal.json` doivent être validées
+avant publication ; le déploiement Hosting refuse une configuration en brouillon.
+
 - **Créer un compte** : email, mot de passe et confirmation, puis formulaire de
   la pharmacie. Connexion et récupération de mot de passe disponibles.
 - Activation commerciale des nouveaux comptes après la vente, depuis un espace

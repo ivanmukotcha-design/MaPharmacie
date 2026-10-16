@@ -1,0 +1,49 @@
+{
+  "appName": "Ma Pharmacie",
+  "publisherName": "Ivan Mukotcha",
+  "supportEmail": "ivanmukotcha@gmail.com",
+  "effectiveDate": "2026-10-16",
+  "approvedForPublication": true,
+  "website": "https://mapharmacie-d56c2.web.app",
+  "sections": [
+    {
+      "title": "Données utilisées",
+      "body": "Ma Pharmacie gère les stocks, lots, fournisseurs, ventes et rapports d'une pharmacie. Les données de compte comprennent l'adresse email, les coordonnées de la pharmacie et de son responsable, ainsi que le statut d'accès. Firebase Authentication traite les identifiants de connexion. Ne communiquez jamais votre mot de passe au support. L'application n'est pas destinée à recevoir des dossiers médicaux ni des informations permettant d'identifier des patients."
+    },
+    {
+      "title": "Finalités et hébergement",
+      "body": "Ces informations servent à authentifier les utilisateurs, gérer l'accès, synchroniser les opérations entre les appareils et fournir l'assistance. Les données métier sont enregistrées localement dans SQLite et synchronisées avec Google Cloud Firestore. Firebase Cloud Messaging traite un identifiant d'installation et un jeton de notification lorsque les notifications sont utilisées. Google/Firebase intervient comme prestataire technique. Les échanges avec Firebase utilisent des connexions chiffrées. La base SQLite locale n'est pas chiffrée par l'application ; protégez l'appareil par un code de verrouillage."
+    },
+    {
+      "title": "Qui peut accéder aux données ?",
+      "body": "Les appareils utilisant les mêmes identifiants partagent le compte et ses données. Un autre compte de pharmacie n'y a pas accès par l'application. Le tableau de bord commercial affiche les coordonnées, statuts et interventions, pas les stocks ni les ventes. Le propriétaire technique du projet Firebase conserve néanmoins des pouvoirs d'administration sur l'infrastructure ; les restrictions du tableau de bord ne suppriment pas ces pouvoirs."
+    },
+    {
+      "title": "Autorisations et exports",
+      "body": "La caméra sert au scan des codes-barres ; les images du scan ne sont pas envoyées à Firebase par cette fonction. Les notifications peuvent être refusées dans les réglages de l'appareil. Vous choisissez vous-même les destinations des PDF et des sauvegardes exportées. Les sauvegardes créées par l'application sont chiffrées avec votre phrase secrète ; les PDF ne le sont pas. À partir de la version Android 1.0.2, les données de l'application sont exclues des sauvegardes automatiques du système et de son transfert entre appareils, sans effacer d'éventuelles copies antérieures. La synchronisation Firebase et les sauvegardes manuelles restent disponibles. Une copie partagée ou enregistrée en dehors de l'application reste sous votre contrôle."
+    },
+    {
+      "title": "Conservation et suppression",
+      "body": "Les données restent utilisées tant que le compte est conservé. Une suspension n'est pas une suppression. Vous pouvez demander la suppression du compte et de ses données depuis la page Web dédiée, même sans réinstaller l'application, ou depuis les paramètres à partir de la version 1.0.2. Le support vérifie votre identité et votre habilitation à agir pour la pharmacie, puis confirme le périmètre et le délai de traitement. Toute conservation imposée pour une raison légitime doit vous être précisée avec sa justification et sa durée ; aucune durée légale universelle n'est présumée ici."
+    },
+    {
+      "title": "Limites de la suppression à distance",
+      "body": "La suppression concerne le compte d'authentification, le profil, les données métier synchronisées et les données d'annuaire associées, sous réserve des éventuelles conservations justifiées et annoncées. Elle ne permet pas d'effacer à distance un appareil hors connexion ni les PDF, sauvegardes et autres copies déjà exportées. Après confirmation du traitement, le responsable doit effacer ces copies et les données locales sur les appareils concernés. La désinstallation seule ne supprime pas les données hébergées sur Firebase."
+    },
+    {
+      "title": "Vos demandes",
+      "body": "Vous pouvez contacter le support pour demander l'accès, la correction ou la suppression de vos informations, ou poser une question sur leur utilisation. Indiquez l'adresse email du compte et le nom de la pharmacie, sans joindre de mot de passe, dossier médical ni sauvegarde complète. La demande de suppression n'est pas soumise à l'activation commerciale du compte."
+    }
+  ],
+  "deletion": {
+    "warning": "Ce compte est partagé : sa suppression concerne toute la pharmacie et tous ses appareils, pas seulement votre téléphone. Une demande ne supprime et ne suspend rien automatiquement.",
+    "steps": [
+      "Si vous devez conserver une copie, exportez les informations nécessaires avant la suppression. Cette précaution est facultative et ne conditionne pas votre demande.",
+      "Envoyez votre demande depuis l'adresse email du compte en indiquant le nom de la pharmacie. Si vous n'avez plus accès à cette adresse, contactez le support pour une autre vérification d'identité. Aucun mot de passe ne vous sera demandé.",
+      "Le support vérifie que vous êtes habilité à agir pour la pharmacie, précise le périmètre, les éventuelles données à conserver et le délai de traitement, puis vous informe de la réalisation.",
+      "Après confirmation, effacez les données locales des appareils concernés et les copies exportées que vous ne devez plus conserver. Une suppression serveur ne les efface pas à distance."
+    ],
+    "subject": "Demande de suppression du compte Ma Pharmacie",
+    "body": "Bonjour,\n\nJe demande la suppression de mon compte Ma Pharmacie et des données associées.\n\nEmail du compte :\nNom de la pharmacie :\nNom et qualité du demandeur :\n\nJe comprends que cette demande concerne le compte partagé et tous ses appareils. Merci de confirmer la procédure et le délai de traitement.\n\nNe pas ajouter de mot de passe ou de données médicales à ce message."
+  }
+}

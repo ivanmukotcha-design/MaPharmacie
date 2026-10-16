@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../settings/privacy_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../config/auth_provider.dart';
@@ -82,8 +83,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           const Text(
-            'Renseignez votre pharmacie pour demander son activation après la vente. Votre fournisseur verra uniquement ces coordonnées et le statut du compte, pas vos stocks ni vos ventes. Après activation, vos appareils utiliseront le même compte.',
+            'Renseignez votre pharmacie pour demander son activation. Le tableau de bord de gestion des accès affiche uniquement ces coordonnées et le statut du compte, pas vos stocks ni vos ventes. Après activation, vos appareils utiliseront le même compte.',
           ),
+          const PrivacyLinks(),
           const SizedBox(height: 20),
           _field(_name, 'Nom de la pharmacie', Icons.local_pharmacy_outlined),
           _field(_owner, 'Responsable', Icons.person_outline),

@@ -22,7 +22,7 @@ function value(entry) {
 function fields(data) {
   return Object.fromEntries(Object.entries(data).map(([key, entry]) => [key, value(entry)]));
 }
-async function account(label) {
+async function account(label, verified = true) {
   const email = `${label}-${Date.now()}@example.test`;
   const response = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-key`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -30,8 +30,56 @@ async function account(label) {
   });
   const data = await response.json();
   assert.equal(response.status, 200, JSON.stringify(data));
-  return { uid: data.localId, token: data.idToken, email };
+  const result = { uid: data.localId, token: data.idToken, email };
+  if (verified) result.token = await verifyAccount(result);
+  return result;
 }
+async function verifyAccount(user) {
+  const update = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:update?key=demo-key`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+    body: JSON.stringify({ localId: user.uid, emailVerified: true }),
+  });
+  assert.equal(update.status, 200, await update.text());
+  const response = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'Test-password-123!', returnSecureToken: true }),
+  });
+  const data = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(data));
+  return data.idToken;
+}
+
+test('Email non confirmé : profil, données et administration refusés même avec un compte actif', async () => {
+  const user = await account('unverified', false);
+  for (const credentials of [
+    { email: user.email, password: 'incorrect' },
+    { email: `absent-${Date.now()}@example.test`, password: 'Test-password-123!' },
+  ]) {
+    const response = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo-key`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...credentials, returnSecureToken: true }),
+    });
+    assert.equal(response.status, 400);
+  }
+  const path = `pharmacies/${user.uid}`;
+  await allowed(write(path, { nom: 'Pharmacie privée', access_status: 'active' }, 'owner'));
+  await allowed(write(`${path}/medicaments/secret`, { nom: 'Privé' }, 'owner'));
+  await allowed(write(`${path}/notifications/secret`, { lu: false }, 'owner'));
+  await allowed(write(`clients/${user.uid}`, { nom: 'Annuaire privé' }, 'owner'));
+  await allowed(write(`account_admins/${user.uid}`, { enabled: true }, 'owner'));
+  for (const target of [path, `${path}/medicaments/secret`, `${path}/notifications/secret`, `clients/${user.uid}`, `account_admins/${user.uid}`]) {
+    await denied(read(target, user.token));
+    await denied(write(target, { email_verified: true }, user.token));
+  }
+  const freshToken = await verifyAccount(user);
+  await denied(read(path, user.token));
+  await allowed(read(path, freshToken));
+  await allowed(read(`${path}/medicaments/secret`, freshToken));
+  const pending = await account('unverified-signup', false);
+  await denied(write(`pharmacies/${pending.uid}`, {
+    code: `PHR-${pending.uid}`, nom: 'Test', email: pending.email, tarifs_gros_actifs: false, access_status: 'pending',
+  }, pending.token, ['created_at']));
+});
 function write(path, data, token, timestamps = []) {
   return fetch(`${endpoint}:commit`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },

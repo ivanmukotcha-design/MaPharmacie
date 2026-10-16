@@ -52,6 +52,7 @@ Future<void> main() async {
   unawaited(NotificationService.init());
 
   runApp(const ProviderScope(child: MaPharmacieApp()));
+
 }
 
 class MaPharmacieApp extends ConsumerWidget {

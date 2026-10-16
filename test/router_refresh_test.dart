@@ -12,6 +12,8 @@ import 'fixtures.dart';
 
 class _User extends Fake implements User {
   @override
+  bool get emailVerified => true;
+  @override
   final String uid;
   _User(this.uid);
 }

@@ -17,6 +17,8 @@ import '../repositories/vente_repository.dart';
 import '../services/export_service.dart';
 import '../shared/widgets/pf_snackbar.dart';
 import '../core/errors/user_message.dart';
+import '../services/public_information.dart';
+import 'settings/privacy_screen.dart';
 
 // ─── REPORTS SCREEN ───────────────────────────────────────────────────────────
 final _exportEnCoursProvider = StateProvider.autoDispose<bool>((ref) => false);
@@ -258,14 +260,18 @@ class ReportsScreen extends ConsumerWidget {
 }
 
 // ─── SUPPORT SCREEN ───────────────────────────────────────────────────────────
-class SupportScreen extends StatelessWidget {
+class SupportScreen extends ConsumerWidget {
   const SupportScreen({super.key});
 
   static const _email = String.fromEnvironment('SUPPORT_EMAIL');
   static const _whatsapp = String.fromEnvironment('SUPPORT_WHATSAPP');
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final information = ref.watch(publicInformationProvider).valueOrNull;
+    final email = information?.ready == true
+        ? information!.supportEmail
+        : _email;
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(title: const Text('Support')),
@@ -303,17 +309,17 @@ class SupportScreen extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           const Text('Nous contacter', style: AppTextStyles.h4),
           const SizedBox(height: AppSpacing.sm),
-          if (_email.isEmpty && _whatsapp.isEmpty)
+          if (email.isEmpty && _whatsapp.isEmpty)
             const Text(
               'Coordonnées du support non configurées. Contactez l’administrateur qui vous a fourni cette application.',
             ),
-          if (_email.isNotEmpty)
+          if (email.isNotEmpty)
             _contactCard(
               icon: Icons.email_outlined,
               titre: 'Email support',
-              sous: _email,
+              sous: email,
               color: AppColors.info,
-              onTap: () => _ouvrirEmail(),
+              onTap: () => _ouvrirEmail(context, email),
             ),
           const SizedBox(height: AppSpacing.sm),
           if (_whatsapp.isNotEmpty)
@@ -328,6 +334,7 @@ class SupportScreen extends StatelessWidget {
           const Text('Questions fréquentes', style: AppTextStyles.h4),
           const SizedBox(height: AppSpacing.sm),
           ..._faqs.map((faq) => _faqItem(faq[0], faq[1])),
+          const PrivacyLinks(),
         ],
       ),
     );
@@ -397,9 +404,18 @@ class SupportScreen extends StatelessWidget {
     );
   }
 
-  void _ouvrirEmail() async {
-    final uri = Uri.parse('mailto:$_email?subject=Support Ma Pharmacie');
-    if (await canLaunchUrl(uri)) launchUrl(uri);
+  Future<void> _ouvrirEmail(BuildContext context, String email) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+      query: 'subject=${Uri.encodeComponent('Support Ma Pharmacie')}',
+    );
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (context.mounted) {
+      PfSnackbar.error(context, 'Messagerie indisponible. Écrivez à $email.');
+    }
   }
 
   void _ouvrirWhatsapp() async {
@@ -581,6 +597,25 @@ class SettingsScreen extends ConsumerWidget {
               'Copie chiffrée protégée par une phrase secrète',
               () => context.push('/sauvegardes'),
               key: const ValueKey('settings_backup'),
+            ),
+          ]),
+
+          _settingsGroup('Confidentialité', [
+            _settingsTile(
+              context,
+              Icons.privacy_tip_outlined,
+              'Politique de confidentialité',
+              'Comprendre l’utilisation de vos données',
+              () => context.push('/confidentialite'),
+              key: const ValueKey('settings_privacy'),
+            ),
+            _settingsTile(
+              context,
+              Icons.person_remove_outlined,
+              'Demander la suppression du compte',
+              'Concerne toute la pharmacie et ses appareils',
+              () => context.push('/suppression-compte'),
+              key: const ValueKey('settings_account_deletion'),
             ),
           ]),
 

@@ -13,6 +13,8 @@ import 'package:pharmaflow/services/sync_service.dart';
 
 class _User extends Fake implements User {
   @override
+  bool get emailVerified => true;
+  @override
   final String uid;
   _User(this.uid);
 }

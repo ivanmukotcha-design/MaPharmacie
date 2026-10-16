@@ -24,6 +24,14 @@
       <button id="reset-password" class="text-button">Mot de passe oublié ?</button>
       <p class="muted">Aucune inscription administrateur publique. Les droits sont attribués séparément dans Firebase.</p>
     </section>
+    <section id="verification" class="login panel" hidden aria-labelledby="verification-title">
+      <h1 id="verification-title">Confirmer votre email</h1>
+      <p id="verification-email"></p>
+      <p>Confirmez votre adresse avant d'accéder à l'administration. Ouvrez le lien reçu dans votre messagerie, puis revenez ici. Cela ne donne aucun droit administrateur supplémentaire.</p>
+      <button id="send-verification">Envoyer un lien de confirmation</button>
+      <button id="check-verification" class="secondary">J'ai confirmé mon email</button>
+      <p>Vérifiez aussi les courriers indésirables. Si le lien est expiré, demandez-en un nouveau. Utilisez le mot de passe de l'application, jamais celui de votre messagerie.</p>
+    </section>
     <section id="workspace" hidden aria-labelledby="workspace-title">
       <div class="heading"><div><p class="eyebrow">Gestion des comptes</p><h1 id="workspace-title">Vos pharmacies clientes</h1><p id="signed-in" class="muted"></p></div><button id="refresh" class="secondary">Actualiser</button></div>
       <div id="stats" class="stats" aria-label="Récapitulatif des fiches chargées"></div>
@@ -50,6 +58,7 @@
     <p id="detail-message" role="status" aria-live="polite"></p>
     <h3>Historique des interventions</h3><p class="muted">30 interventions les plus récentes. Historique non modifiable.</p><ol id="history"></ol>
   </dialog>
+  <nav class="public-links" aria-label="Informations légales"><a href="confidentialite.html">Confidentialité</a><a href="suppression-compte.html">Suppression du compte</a></nav>
   <noscript>Activez JavaScript pour utiliser cet espace administrateur.</noscript>
 </body>
 </html>

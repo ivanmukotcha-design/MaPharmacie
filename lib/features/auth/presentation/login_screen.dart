@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../settings/privacy_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
@@ -198,6 +199,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const Text(
                 'Nouvelle pharmacie ? Créez son compte. Sur les autres appareils, connectez-vous avec le même email et le même mot de passe pour retrouver ses données.',
               ),
+              const PrivacyLinks(),
             ],
           ),
         ),

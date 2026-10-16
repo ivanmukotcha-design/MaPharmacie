@@ -33,6 +33,8 @@ import 'fixtures.dart';
 
 class _User extends Fake implements User {
   @override
+  bool get emailVerified => true;
+  @override
   String get uid => 'pharma-1';
   @override
   String get email => 'pharmacie@example.com';

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/create_account_screen.dart';
+import '../features/auth/presentation/verify_email_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
@@ -19,6 +20,7 @@ import '../features/support/support_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/settings/sync_screen.dart';
 import '../features/settings/backup_screen.dart';
+import '../features/settings/privacy_screen.dart';
 import '../shared/widgets/main_scaffold.dart';
 import '../shared/widgets/responsive_layout.dart';
 import 'auth_provider.dart';
@@ -41,10 +43,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         loading: auth.isLoading || (user != null && pharmacie.isLoading),
         hasError: auth.hasError || (user != null && pharmacie.hasError),
         userId: user?.uid,
+        emailVerified: user?.emailVerified == true,
         pharmacie: pharmacie.valueOrNull,
       );
     },
     routes: [
+      GoRoute(
+        path: '/verifier-email',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 720, child: VerifyEmailScreen()),
+      ),
+      GoRoute(
+        path: '/confidentialite',
+        builder: (_, __) =>
+            const ResponsivePage(maxWidth: 800, child: PrivacyScreen()),
+      ),
+      GoRoute(
+        path: '/suppression-compte',
+        builder: (_, __) => const ResponsivePage(
+          maxWidth: 800,
+          child: PrivacyScreen(deletion: true),
+        ),
+      ),
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(
         path: '/login',

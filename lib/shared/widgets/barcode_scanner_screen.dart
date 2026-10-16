@@ -24,7 +24,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     appBar: AppBar(title: const Text('Scanner un code-barres')),
     body: MobileScanner(
       controller: _controller,
-      errorBuilder: (_, error, __) => ScrollableEmptyState(
+      errorBuilder: (_, error) => ScrollableEmptyState(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(

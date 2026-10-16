@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence, sendPasswordResetEmail, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, setPersistence, browserSessionPersistence, sendPasswordResetEmail, sendEmailVerification, reload, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { getFirestore, collection, doc, getDocFromServer, getDocsFromServer, query, orderBy, limit, startAfter, where, runTransaction, serverTimestamp, onSnapshot, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import { labels, transitions, validateDecision, filterClients, summarize } from './access.mjs';
 
@@ -9,6 +9,15 @@ const date = value => value?.toDate ? value.toDate().toLocaleString('fr-FR') : '
 const local = ['127.0.0.1', 'localhost'].includes(location.hostname) && new URLSearchParams(location.search).get('emulators') === '1';
 let auth, database, clients = [], cursor = null, more = false, selected = null, epoch = 0, authorized = false, roleSubscription = null;
 let listBusy = false, actionBusy = false;
+let verificationBusy = false;
+const verificationSentAt = new Map();
+
+function updateVerificationButtons() {
+  const last = verificationSentAt.get(auth?.currentUser?.uid) || 0;
+  element('send-verification').disabled = verificationBusy || Date.now() - last < 60000;
+  element('check-verification').disabled = verificationBusy;
+}
+setInterval(updateVerificationButtons, 1000);
 
 function node(tag, text, className) {
   const result = document.createElement(tag);
@@ -208,6 +217,71 @@ element('reset-password').addEventListener('click', async () => {
   } catch (error) { message(describeError(error)); }
 });
 
+element('send-verification').addEventListener('click', async () => {
+  const user = auth.currentUser;
+  if (!user || user.emailVerified || verificationBusy || Date.now() - (verificationSentAt.get(user.uid) || 0) < 60000) return;
+  const ticket = epoch;
+  verificationBusy = true;
+  updateVerificationButtons();
+  try {
+    auth.languageCode = 'fr';
+    await sendEmailVerification(user);
+    verificationSentAt.set(user.uid, Date.now());
+    if (ticket === epoch) message('Lien envoyé. Consultez vos emails et les courriers indésirables. Patientez une minute avant un nouvel envoi.');
+  } catch (error) {
+    if (error.code === 'auth/too-many-requests') verificationSentAt.set(user.uid, Date.now());
+    if (ticket === epoch) message('Envoi impossible. Vérifiez votre connexion et patientez avant de réessayer.');
+  } finally { verificationBusy = false; updateVerificationButtons(); }
+});
+
+element('check-verification').addEventListener('click', async () => {
+  const user = auth.currentUser;
+  if (!user || verificationBusy) return;
+  const ticket = epoch;
+  verificationBusy = true;
+  updateVerificationButtons();
+  try {
+    await reload(user);
+    if (ticket !== epoch || auth.currentUser?.uid !== user.uid) return;
+    const token = await user.getIdTokenResult(true);
+    if (ticket !== epoch || auth.currentUser?.uid !== user.uid) return;
+    if (!user.emailVerified || token.claims.email_verified !== true) {
+      message('L’adresse n’est pas encore confirmée. Ouvrez le lien reçu par email puis réessayez.');
+      return;
+    }
+    await handleSession(auth.currentUser);
+  } catch (error) { if (ticket === epoch) message(describeError(error)); }
+  finally { verificationBusy = false; updateVerificationButtons(); }
+});
+
+async function handleSession(user) {
+  const ticket = ++epoch;
+  roleSubscription?.();
+  roleSubscription = null;
+  clearWorkspace();
+  element('logout').hidden = !user;
+  element('login').hidden = Boolean(user);
+  element('verification').hidden = !user || user.emailVerified;
+  element('verification-email').textContent = user?.email || '';
+  updateVerificationButtons();
+  if (!user) { message(''); return; }
+  if (!user.emailVerified) { message('Confirmez votre adresse email pour continuer.'); return; }
+  message('Vérification des droits administrateur…');
+  try {
+    const reference = doc(database, 'account_admins', user.uid);
+    const role = await getDocFromServer(reference);
+    if (ticket !== epoch) return;
+    if (role.data()?.enabled !== true) { message('Ce compte ne possède pas les droits administrateur. Déconnectez-vous ou contactez le propriétaire du projet.'); return; }
+    authorized = true;
+    element('workspace').hidden = false;
+    element('signed-in').textContent = `Connecté : ${user.email}`;
+    roleSubscription = onSnapshot(reference, snapshot => {
+      if (ticket === epoch && snapshot.data()?.enabled !== true) { ++epoch; clearWorkspace(); message('Vos droits administrateur ont été retirés.'); }
+    }, () => { if (ticket === epoch) { ++epoch; clearWorkspace(); message('Droits indisponibles. Reconnectez-vous pour les vérifier.'); } });
+    await loadClients(true);
+  } catch (error) { if (ticket === epoch) message(describeError(error)); }
+}
+
 try {
   const response = local ? null : await fetch('/__/firebase/init.json', { cache: 'no-store' });
   if (!local && !response.ok) throw new Error('Ouvrez ce tableau de bord depuis Firebase Hosting. Consultez le guide de déploiement.');
@@ -217,27 +291,5 @@ try {
   database = getFirestore(app);
   if (local) { connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true }); connectFirestoreEmulator(database, '127.0.0.1', 8080); }
   await setPersistence(auth, browserSessionPersistence);
-  onAuthStateChanged(auth, async user => {
-    const ticket = ++epoch;
-    roleSubscription?.();
-    roleSubscription = null;
-    clearWorkspace();
-    element('logout').hidden = !user;
-    element('login').hidden = Boolean(user);
-    if (!user) { message(''); return; }
-    message('Vérification des droits administrateur…');
-    try {
-      const reference = doc(database, 'account_admins', user.uid);
-      const role = await getDocFromServer(reference);
-      if (ticket !== epoch) return;
-      if (role.data()?.enabled !== true) { message('Ce compte ne possède pas les droits administrateur. Déconnectez-vous ou contactez le propriétaire du projet.'); return; }
-      authorized = true;
-      element('workspace').hidden = false;
-      element('signed-in').textContent = `Connecté : ${user.email}`;
-      roleSubscription = onSnapshot(reference, snapshot => {
-        if (ticket === epoch && snapshot.data()?.enabled !== true) { ++epoch; clearWorkspace(); message('Vos droits administrateur ont été retirés.'); }
-      }, () => { if (ticket === epoch) { ++epoch; clearWorkspace(); message('Droits indisponibles. Reconnectez-vous pour les vérifier.'); } });
-      await loadClients(true);
-    } catch (error) { if (ticket === epoch) message(describeError(error)); }
-  });
+  onAuthStateChanged(auth, handleSession);
 } catch (error) { message(describeError(error)); }
